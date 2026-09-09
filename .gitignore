@@ -4,3 +4,5 @@ __pycache__/
 build/
 venv
 site/out/
+ladder/.grid-column.*.lock
+ladder/*/*-public-report*.json.tmp.*

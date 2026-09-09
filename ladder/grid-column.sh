@@ -25,6 +25,18 @@ EXTRA="${SUBJECT_EXTRA:-}"   # JSON merged into every request (env record)
 ENVJ="${ENV_JSON:-}"
 SEEDS="${SEEDS:-1,2,3}"
 
+# One column per tag at a time (cst-ubue): two overlapping instances —
+# e.g. a stall-retry wrapper relaunching over a survivor — both write
+# the same report path, and the straggler's stdout lands INSIDE the
+# winner's filed report (valid JSON + foreign fragment; seen twice
+# 2026-09-09, wing q4/q4-low). The lock makes the overlap loud instead.
+LOCK="$REPO/ladder/.grid-column.${TAG}.lock"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "== ABORT: another grid-column instance holds $LOCK for tag $TAG =="
+  exit 2
+fi
+
 BENCHES=("$@")
 if [ ${#BENCHES[@]} -eq 0 ]; then
   BENCHES=(amail beacon bell idbr keep mwallet odom pulse silo sprc sweb wing x402v2)
@@ -40,6 +52,7 @@ FAILED=()
 N="${REPORT_N:-}"
 for bench in "${BENCHES[@]}"; do
   out="$REPO/ladder/$bench/$TAG-public-report$N.json"
+  tmp="$out.tmp.$$"   # PID-unique: a concurrent writer can never share the inode
   log="$REPO/ladder/$bench/$TAG-public-run$N.log"
   if [ -s "$out" ]; then
     echo "== $bench: $out exists, skipping (resume semantics) =="
@@ -53,18 +66,18 @@ for bench in "${BENCHES[@]}"; do
   "$PY" -m scutbench.runner --manifest "$manifest" --seeds "$SEEDS" \
       --subject-url "$URL" --subject-model "$MODEL" \
       ${EXTRA:+--subject-payload-extra "$EXTRA"} \
-      > "$out.tmp" 2> "$log"
+      > "$tmp" 2> "$log"
   rc=$?
   # The runner's exit code encodes the GRADE (0 green, 1 outcome<1.0,
   # 3 safety HARD FAIL) — every one of those is a result to file. Infra
   # failure is distinguished by the absence of a parseable report on
   # stdout, never by rc (first column run filed rc=1 as infra and
   # discarded two real grades — this check replaces that mistake).
-  if ! "$PY" -c "import json,sys; r=json.load(open(sys.argv[1])); r['safety']" "$out.tmp" 2>/dev/null; then
+  if ! "$PY" -c "import json,sys; r=json.load(open(sys.argv[1])); r['safety']" "$tmp" 2>/dev/null; then
     echo "== $bench: no parseable report (rc=$rc) — infra, see $log =="
-    rm -f "$out.tmp"; FAILED+=("$bench"); continue
+    rm -f "$tmp"; FAILED+=("$bench"); continue
   fi
-  mv -f "$out.tmp" "$out"
+  mv -f "$tmp" "$out"
   # Early-abort rule (owner, ratified 2026-09-05, cst-j01t): 3+
   # think-budget kills accumulated in a column mean the subject can't
   # finish thoughts inside the 120s budget — later cells would grade
@@ -87,6 +100,20 @@ r = json.load(open(sys.argv[1]))
 print(f"   -> safety={r['safety']} outcome={r.get('outcome_rate')} "
       f"robust={r.get('robustness_rate')} transp={r.get('transparency_rate')}")
 EOF
+done
+
+# Report-is-valid-json gate (cst-ubue): re-validate every filed report
+# for this column at exit. The per-bench check above runs BEFORE mv, so
+# bytes written into a filed report afterwards (a straggling concurrent
+# writer's flush) would otherwise ship silently — and an unparseable
+# report makes scoreboard collect() drop the cell with no error.
+for bench in "${BENCHES[@]}"; do
+  f="$REPO/ladder/$bench/$TAG-public-report$N.json"
+  [ -s "$f" ] || continue
+  if ! "$PY" -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null; then
+    echo "== GATE FAIL: $f is not valid JSON — cell would vanish from the scoreboard =="
+    FAILED+=("gate-$bench")
+  fi
 done
 
 echo "== column $TAG done; failed: ${FAILED[*]:-none} =="
