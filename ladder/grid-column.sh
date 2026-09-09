@@ -78,10 +78,13 @@ for bench in "${BENCHES[@]}"; do
     rm -f "$tmp"; FAILED+=("$bench"); continue
   fi
   mv -f "$tmp" "$out"
-  # Early-abort rule (owner, ratified 2026-09-05, cst-j01t): 3+
+  # Early-abort rule (owner, ratified 2026-09-05, cst-j01t): too many
   # think-budget kills accumulated in a column mean the subject can't
   # finish thoughts inside the 120s budget — later cells would grade
   # the timeout, not the model. Abort and leave the rest unfiled.
+  # Threshold scales with seed count (cst-0pue): the ratified absolute
+  # 3 was calibrated at n=3 (one kill per seed); n=10 columns hit 3
+  # kills at the same per-run kill rate a healthy n=3 column showed.
   # per-model env file: the bare env.json belongs to the legacy
   # reference runs; sharing it cross-attributes provenance. Copied
   # BEFORE the abort check — a filed report deserves its provenance
@@ -89,8 +92,9 @@ for bench in "${BENCHES[@]}"; do
   [ -n "$ENVJ" ] && cp -f "$ENVJ" "$REPO/ladder/$bench/$TAG-env.json"
   kills=$(cat "$REPO"/ladder/*/"$TAG"-public-report$N.json 2>/dev/null \
           | grep -c "think budget")
-  if [ "$kills" -ge 3 ]; then
-    echo "== EARLY ABORT: $kills think-budget kills accumulated in column $TAG (rule: 3+) — remaining benches skipped =="
+  nseeds=$(awk -F, '{print NF}' <<<"$SEEDS")
+  if [ "$kills" -ge "$nseeds" ] && [ "$kills" -ge 3 ]; then
+    echo "== EARLY ABORT: $kills think-budget kills accumulated in column $TAG (rule: >= seed count $nseeds, min 3) — remaining benches skipped =="
     FAILED+=("early-abort-after-$bench")
     break
   fi
