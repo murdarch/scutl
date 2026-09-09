@@ -1,0 +1,96 @@
+Traceback (most recent call last):
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/http/client.py", line 1394, in getresponse
+    response.begin()
+  File "/usr/lib/python3.11/http/client.py", line 323, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/http/client.py", line 292, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/adapters.py", line 696, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 498, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/util/util.py", line 38, in reraise
+    raise value.with_traceback(tb)
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/http/client.py", line 1394, in getresponse
+    response.begin()
+  File "/usr/lib/python3.11/http/client.py", line 323, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/http/client.py", line 292, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+urllib3.exceptions.ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/star/seats/star/work/scutl/scutbench/subject.py", line 170, in transport
+    resp = requests.post(url, json=payload, headers=headers,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/api.py", line 134, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/api.py", line 71, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/sessions.py", line 651, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/sessions.py", line 784, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/.venv/lib/python3.11/site-packages/requests/adapters.py", line 711, in send
+    raise ConnectionError(err, request=request)
+requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/star/seats/star/work/scutl/scutbench/runner.py", line 579, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/star/seats/star/work/scutl/scutbench/runner.py", line 555, in main
+    report = scenarios.run_suite(recipe, policy, seeds,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/scutbench/scenarios.py", line 327, in run_suite
+    results.append(run_scenario(scn, policy, seed))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/scutbench/scenarios.py", line 273, in run_scenario
+    report = policy(twin) or {}
+             ^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/scutbench/subject.py", line 232, in __call__
+    msg = self.transport(payload)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/star/seats/star/work/scutl/scutbench/subject.py", line 179, in transport
+    raise SubjectTransportError(f"POST {url}: {e}") from e
+scutbench.subject.SubjectTransportError: POST http://127.0.0.1:18081/v1/chat/completions: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))

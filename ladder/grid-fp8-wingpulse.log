@@ -1,0 +1,27 @@
+== vLLM ready ==
+== wing: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8 @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== EARLY ABORT: 20 think-budget kills accumulated in column qwen38-27b-fp8 (rule: 3+) — remaining benches skipped ==
+== column qwen38-27b-fp8 done; failed: early-abort-after-wing ==
+== pulse: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8 @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== pulse: no parseable report (rc=1) — infra, see /home/star/seats/star/work/scutl/ladder/pulse/qwen38-27b-fp8-public-run2.log ==
+== column qwen38-27b-fp8 done; failed: pulse ==
+== wing: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8-low @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== wing: no parseable report (rc=1) — infra, see /home/star/seats/star/work/scutl/ladder/wing/qwen38-27b-fp8-low-public-run2.log ==
+== column qwen38-27b-fp8-low done; failed: wing ==
+== pulse: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8-low @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== pulse: no parseable report (rc=1) — infra, see /home/star/seats/star/work/scutl/ladder/pulse/qwen38-27b-fp8-low-public-run2.log ==
+== column qwen38-27b-fp8-low done; failed: pulse ==
+== ALL FP8 WING/PULSE COLUMNS DONE ==
+== pulse: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8 @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== EARLY ABORT: 20 think-budget kills accumulated in column qwen38-27b-fp8 (rule: 3+) — remaining benches skipped ==
+== column qwen38-27b-fp8 done; failed: early-abort-after-pulse ==
+== CELL OK: pulse qwen38-27b-fp8 (attempt 1) ==
+== wing: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8-low @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== EARLY ABORT: 9 think-budget kills accumulated in column qwen38-27b-fp8-low (rule: 3+) — remaining benches skipped ==
+== column qwen38-27b-fp8-low done; failed: early-abort-after-wing ==
+== CELL OK: wing qwen38-27b-fp8-low (attempt 1) ==
+== pulse: public menu, seeds 1,2,3,4,5,6,7,8,9,10, subject qwen38-27b-fp8-low @ https://0n4jwbtheqtbfl-8000.proxy.runpod.net ==
+== EARLY ABORT: 9 think-budget kills accumulated in column qwen38-27b-fp8-low (rule: 3+) — remaining benches skipped ==
+== column qwen38-27b-fp8-low done; failed: early-abort-after-pulse ==
+== CELL OK: pulse qwen38-27b-fp8-low (attempt 1) ==
+== FP8 WING/PULSE ROUND 2 DONE ==
