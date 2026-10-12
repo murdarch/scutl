@@ -1,11 +1,5 @@
 # ADAPT — make this recipe available in your harness
 
-> DRAFT status (cst-q03b): this file ships as ADAPT-draft.md and is not
-> yet linked from the catalog. It becomes ADAPT.md — and the recipe
-> becomes installable — only after a fresh-agent acceptance run proves
-> it, per the catalog's ADAPT pattern. The acceptance for THIS recipe
-> moves real money, so that run happens with the human at the desk.
-
 You are an agent integrating the **wallet-mainnet** recipe into a
 harness (Hermes, OMP, Claude Code, Codex, or any agent stack that can
 run shell commands and carry a system prompt). This document is
@@ -123,6 +117,17 @@ harness's convention, preserve four properties:
   codes to the agent; don't collapse them into a generic error string.
   NOTE: this table diverges from the inner testnet signer (which uses
   7 for permanent); callers of `msigner` follow THIS table.
+- **`mw_pay` does not work on mainnet — say so in your integration.**
+  Direct pay needs a blessed facilitator and eip155:8453 has none; it
+  exits 8 with that message. Only merchant-settled purchases
+  (`x402-buy`, i.e. `mw_buy`) move money on this network. Document
+  `mw_buy` as the spend path and `mw_pay` as present-but-refusing, or
+  agents will debug a working wall. (Found in acceptance, 2026-10-11.)
+- **Ratchet cap names are `cap_per_tx|cap_daily|cap_lifetime`** —
+  `msigner admin ratchet --cap` (and the matching `msigner-approve
+  ratchet --cap` scope) take these exact literals, not the bare
+  `per_tx`-style names the status output uses. (Found in acceptance,
+  2026-10-11.)
 
 ## Step 3 — Carry the guardrails into system context
 

@@ -1,0 +1,81 @@
+{
+ "receipt_format": "scutl-adapt-acceptance-1",
+ "recipe": "wallet-mainnet",
+ "rev": 2,
+ "date": "2026-10-11",
+ "bead": "cst-iepc",
+ "harness": "Claude Code (linux, Fable 5 seat)",
+ "operator": "fresh clean-context subagent (install + gate probes, unaided) + Star relaying human tokens + owner live at desk for all money-moving steps",
+ "network": "eip155:8453 (Base mainnet)",
+ "address": "0xB5147b5c5e33e08da4199F61009975af761Eb7e0",
+ "funding": {
+  "pre_run_top_up": "2.00 USDC (owner, 2026-10-11) onto held 1.25 -> 3.25"
+ },
+ "fresh_agent_phase": {
+  "inputs": "recipe directory + 'make this available in Claude Code' + token-relay mechanics; zero doc help",
+  "installed": [
+   "skill .claude/skills/wallet-mainnet/SKILL.md (tools table w/ absolute paths, SCUTL_STATE note, exit taxonomy, execute.loop + guardrails verbatim)",
+   "msigner panic + status allowlisted in project settings.json so panic is never behind a prompt"
+  ],
+  "degradation": "generic Bash tool, not six named tools \u2014 acceptable per ADAPT step 2; walls hold in signer code",
+  "checks_passed": [
+   "ceremony gate: status exit 0, ceremony 3/3, address unchanged vs rev-1 receipt",
+   "token-less ratchet: exit 4, no pending raise created",
+   "panic probe: panic ungated exit 0; sign and admin refused exit 9; status readable; unpanic required human token; state restored exactly",
+   "restart/derivation: fresh invocations re-derive address, caps, counters, panic state across freeze/thaw"
+  ],
+  "venv_note": "live venv sits INSIDE the git tree (pre-existing from rev 1) contrary to ADAPT's durable-path advice; works, flagged, not moved"
+ },
+ "money_moving_phase": {
+  "note": "run by holding seat in main session after harness classifier blocked delegating spend instructions to the subagent; owner approved each step live (manual permission mode)",
+  "drills": [
+   {
+    "drill": "cap-lower-immediate",
+    "result": "per_tx 1.00->0.50 with owner-scoped token, applied immediately, no pending entry"
+   },
+   {
+    "drill": "over-cap",
+    "result": "1.00 USDC calendars offer refused exit 5 at per_tx 0.50 before any signature"
+   },
+   {
+    "drill": "ratchet",
+    "result": "delay override 24h->0.05h performed BY OWNER'S authority (custody param); raise 0.50->1.00 queued with absolute effective_at 2026-10-11T23:26:07Z, pending-visible in status, proven INERT (purchase still exit 5 during delay), applied only after maturity; delay restored to 24h after"
+   },
+   {
+    "drill": "live-purchase",
+    "result": "1.00 USDC x402 v2 purchase calendars.stockql.ai/calendars/americas; settle tx 0x106bddbc3b406d0b3f6da355f5528f78e6ff315e60a692853c3b5adfcd621b69 confirmed; content delivered; spend log authorized->settled consistent"
+   },
+   {
+    "drill": "idempotent-replay",
+    "result": "re-invocation same payment id returned idempotent_replay=true, no second spend"
+   },
+   {
+    "drill": "daily-cap",
+    "result": "next 1.00 offer refused exit 5 (1.00 + spent 1.00 > daily 1.00) before signature"
+   }
+  ],
+  "skipped": [
+   "lifetime-cap binding: cannot bind without exceeding the daily cap (needs >4.00 more spend today); arithmetic verified (spent_lifetime incremented 1.00->2.00 of 5.00)",
+   "sweep rehearsal: deliberately deferred by owner (standing choice from rev 1)"
+  ]
+ },
+ "doc_bugs_found": [
+  "mw_pay unusable on mainnet: exit 8 'needs a blessed facilitator and eip155:8453 has none; only merchant-settled purchases (x402-buy) run on this network' \u2014 manifest/ADAPT did not say so; ADAPT + skill now warn",
+  "ratchet --cap takes cap_per_tx|cap_daily|cap_lifetime, not bare names the manifest hints \u2014 ADAPT + skill now document the real choices"
+ ],
+ "final_state": {
+  "balance_usdc": "2.250000",
+  "spent_last_24h": "1.000000",
+  "spent_lifetime": "2.000000",
+  "caps": {
+   "per_tx": "1.00",
+   "daily": "1.00",
+   "lifetime": "5.00"
+  },
+  "ratchet_delay_hours": "24",
+  "pending_ratchets": [],
+  "panic": null,
+  "caps_re_ratified_by_owner": "caps re-ratified 1/1/5, 24h delay (Conway, live, 2026-10-12)"
+ },
+ "disposition": "acceptance PASSED; ADAPT-draft.md renamed to ADAPT.md; integration + transcript checked in under integrations/claude-code/wallet-mainnet/"
+}
