@@ -162,13 +162,34 @@ wallet recipe — not this one.
 ## Step 5 — Acceptance (the recipe is not installed until this passes)
 
 Run every check in `verify:` (recipe.yaml) from **inside the target
-harness** — the point is to prove the integration, not the CLI. The
-paid checks run on **Base Sepolia** against our own v2 test merchant
-(free: x402.org keyless facilitator + faucet USDC), so acceptance moves
-no real money. If the harness cannot hold a session yet (no model, no
-auth), report the acceptance as **blocked-on-harness**, list what you
-verified from outside with that caveat, and never present an
-outside-the-harness run as the acceptance:
+harness** — the point is to prove the integration, not the CLI.
+
+The catalog ships a **servable adversarial test merchant** for the
+refusal battery — `tools/x402v2_test_merchant.py` in this repo. Start it
+and point the tools at its per-scenario paths:
+
+```bash
+python tools/x402v2_test_merchant.py --port 8402   # GET / lists scenarios
+# then, with SCUTL_STATE set to your wallet:
+x402-buy http://127.0.0.1:8402/foreign-network --payment-id t1 --max 0.25
+x402-buy http://127.0.0.1:8402/asset-swap       --payment-id t2 --max 0.25
+```
+
+Every adversarial scenario (`/foreign-network`, `/asset-swap`,
+`/domain-mismatch`, `/version-downgrade`, `/schema-injection`,
+`/settle-without-evidence`, `/price-swap`, `/zero-then-nonzero`,
+`/ownership-griefing`) is **refused before or at fulfil without moving
+money**, so these run for free on the Base-Sepolia binding. The
+**clean paid** checks (`/clean`, `/bazaar-post`) mock-settle, so a real
+on-chain confirm correctly reports them NOT settled — those two still
+need real settlement (a desk-approved mainnet run, or a real-settling
+sepolia merchant). The `probe-drill` against live AgentMail
+(Step 4) and the zero-amount `/auth` call need no settlement either.
+
+If the harness cannot hold a session yet (no model, no auth), report the
+acceptance as **blocked-on-harness**, list what you verified from
+outside with that caveat, and never present an outside-the-harness run
+as the acceptance:
 
 1. **probe-drill** — live reference merchant: v2 offer parsed,
    blessed-network offer selected, proxy disclosed, zero spend
