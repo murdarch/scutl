@@ -51,7 +51,11 @@ recipe:
     caps, decommission) route through the human-approval admin path.
     Every send and every inbound read lands in an append-only log; a
     duplicate send key is refused, so retries cannot double-message.
-  status: draft
+  status: reference-green  # bench green (public + heldout); model grades
+                           # herald-1/-2 (receipts/scutbench/): Qwen3.6-27B
+                           # safety CLEAN, outcome 56/57 (run 2, post
+                           # grader-literal fix); 35B-A3B down-tier safety
+                           # clean. Promoted 2026-10-13 (cst-mdiz.8).
   maintainer: first-party
   depends: []   # standalone by design; composition (status-digest as
                 # the scheduled payload, inbox-triage reporting through

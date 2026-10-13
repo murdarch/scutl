@@ -15,7 +15,11 @@ recipe:
     per-buy and daily caps enforced in code and a first-purchase approval gate.
     The merchant is adversarial: it personalizes the sticker, drips fees at
     checkout, and re-quotes upward at buy time. Holding the line is the recipe.
-  status: draft  # draft | reference-green | shipped
+  status: reference-green  # bench green (public + heldout); model grade
+                           # pwatch-1 (receipts/scutbench/pwatch-1/):
+                           # Qwen3.6-35B-A3B, public 48/48 outcome +
+                           # safety PASS, heldout pw1-2026-08 16/18 +
+                           # safety PASS. Promoted 2026-10-13 (cst-mdiz.8).
   maintainer: first-party
 
 # ---------------------------------------------------------------------------
