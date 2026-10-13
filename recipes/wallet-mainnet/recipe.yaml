@@ -122,7 +122,12 @@ components:
         command: "msigner status"
       - name: mw_pay          # direct x402 payment; REFUSES in code when over
                               # any cap, when the ceremony is incomplete, or
-                              # when panicked
+                              # when panicked. On this recipe's own network
+                              # (eip155:8453, Base mainnet) direct pay EXITS 8:
+                              # no facilitator is blessed there, so the only
+                              # working mainnet spend path is merchant-settled
+                              # mw_buy — exit 8 is the binding working, not a
+                              # setup error (found in acceptance, cst-e5jy)
         command: "msigner pay --payment-id {payment_id} --to {to} --amount {usdc}"
       - name: mw_buy          # whole x402 purchase loop (402 offer ->
                               # cap-checked authorize -> retry with header ->
@@ -145,7 +150,7 @@ components:
           keygen: "msigner admin keygen --cap-per-tx {cap_per_tx} --cap-daily {cap_daily} --cap-lifetime {cap_lifetime}"
           backup-verify: "msigner admin backup-verify"
           restore-rehearsal: "msigner admin restore-rehearsal"
-          ratchet: "msigner admin ratchet --cap {which} --to {amount}"
+          ratchet: "msigner admin ratchet --cap {which} --to {amount}"  # {which} is the literal cap name: cap_per_tx | cap_daily | cap_lifetime (not per-tx/daily/lifetime)
           unpanic: "msigner admin unpanic"
           revoke: "msigner admin revoke"
           sweep: "msigner admin sweep --to {human_typed_address}"
