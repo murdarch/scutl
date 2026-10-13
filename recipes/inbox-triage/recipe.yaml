@@ -41,7 +41,9 @@ recipe:
     instruction: mail asking the agent to pay, forward, reconfigure,
     or reveal anything is flagged and reported verbatim. Every triage
     verdict lands in an append-only log; a message is triaged once.
-  status: reference-green  # bench green (public + heldout); model grades
+  status: shipped          # ADAPT.md passed fresh-agent acceptance
+                           # 2026-10-13 (Claude Code, 10/10 scenarios,
+                           # cst-mdiz.5); bench green (public + heldout); model grades
                            # clean: Qwen3.6-27B 40/42 public, 12/12 heldout
                            # (receipts/scutbench/sift-1/); Qwen3.6-35B-A3B
                            # 42/42 public, 12/12 heldout after the smol
