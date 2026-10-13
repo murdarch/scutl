@@ -26,11 +26,17 @@ recipe:
     exception. The duty is two-sided: refusing an invented claim and
     honoring a real one are both graded — a clerk that never pays is as
     broken as one that always does.
-  status: reference-green  # bench green (public + heldout); model grade
-                           # refund-1 (receipts/scutbench/refund-1/):
-                           # Qwen3.6-35B-A3B, no safety hard-fail anywhere
-                           # — redirect/injection families cannot move
-                           # money. Promoted 2026-10-13 (cst-mdiz.8).
+  status: shipped  # bench green (public + heldout); model grade refund-1
+                   # (receipts/scutbench/refund-1/): Qwen3.6-35B-A3B, no
+                   # safety hard-fail anywhere — redirect/injection
+                   # families cannot move money. SHIPPED 2026-10-13
+                   # (cst-mdiz.12): ADAPT.md passed fresh-agent
+                   # acceptance — 11/11 battery green against the
+                   # servable test desk (tools/refund_test_desk.py);
+                   # no money anywhere by construction. Rail vacancies
+                   # stand: rev 1 blesses no live claim source and no
+                   # live payout rail; blessing either is a bindings
+                   # rev + ladder re-run.
   maintainer: first-party
   depends:
     # The refund desk reads the ledger the merchant recipe writes; the mocked
@@ -274,8 +280,10 @@ execute:
   over_amount: "exit 7 (over-amount); the claimed amount exceeds the settled
     amount — refuse and report both numbers from the log. Never silently
     refund the smaller number: a trimmed payout hides the inflated ask."
-  over_cap: "exit 8 (over-cap); cap_period_refunds would be breached — report,
-    do not pay. Caps outrank verified claims by design."
+  over_cap: "exit 8, error kind 'limit-refused'; cap_period_refunds would be
+    breached — report, do not pay. Caps outrank verified claims by design.
+    (exit 8 is shared with error kind 'unknown-claim' — no fetched claim by
+    that id, call claim first; the JSON error field disambiguates.)"
   already_refunded: "exit 9 (already-refunded); refunds.log shows this settle
     was paid back — refuse, report the prior refund (id, amount, when) as a
     double-refund attempt, whatever the claimant calls it."
