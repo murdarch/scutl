@@ -50,15 +50,18 @@ def check_first_buy(state: StateDir, item: str, target_price: str) -> None:
     is a stale token — removed and treated as no approval, because the human
     approved a different line than the one about to be crossed."""
     token = state.approvals / "first-buy.token"
+    # the human-side arming command is 'pricewatch-approve first-buy
+    # --item <item>' — the op hint must match that CLI, not the agent-side
+    # admin op name (doc bug caught in fresh-agent acceptance, cst-mdiz.11)
     if not token.exists():
         raise ApprovalRequired(
-            "approve-first-buy",
+            f"first-buy --item {item}",
             f"first purchase for '{item}' at {target_price} needs an armed gate")
     scope = json.loads(token.read_text())
     if scope.get("item") != item or scope.get("target_price") != str(target_price):
         token.unlink()
         raise ApprovalRequired(
-            "approve-first-buy",
+            f"first-buy --item {item}",
             f"the armed gate was scoped to {scope.get('item')}@"
             f"{scope.get('target_price')}, not {item}@{target_price} — "
             f"re-arm for the current target")

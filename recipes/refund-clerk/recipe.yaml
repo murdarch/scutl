@@ -113,7 +113,7 @@ components:
   refclerk:
     kind: typed-tool          # typed boundary; no shell, no free-form send
     source: ./refclerk/
-    state_dir: "${SCUTL_STATE:-~/.scutl/refund}"   # policy.json, claims queue,
+    state_dir: "${SCUTL_REFUND_STATE:-~/.scutl/refund}"  # policy.json, claims queue,
                                                     # refunds.log (append-only),
                                                     # earnings.log (read-only
                                                     # mount from the merchant),
@@ -147,7 +147,7 @@ components:
                               # from bare model intent.
         command: "refclerk admin {op}"
         ops:
-          configure: "refclerk admin configure --window-days {refund_window_days} --auto-max {auto_refund_max_usdc} --period-cap {cap_period_refunds}"
+          configure: "refclerk admin configure --window-days {refund_window_days} --auto-max {auto_refund_max_usdc} --period-cap {cap_period_refunds} --earnings-log {earnings_log_path}"
           exception: "refclerk admin exception --claim-id {claim_id}"   # human approves a parked refund
           deny: "refclerk admin deny --claim-id {claim_id}"             # human closes a parked claim unrefunded
           decommission: "refclerk admin decommission"
@@ -237,11 +237,12 @@ setup:
   - step: install-refclerk
     run: "refclerk install into state_dir; verify tools respond; earnings.log mounted read-only"
     commands: ["pip install ./refclerk", "refclerk status"]
-    expect: "exit 2 (not-setup) before policy is recorded; any other error is not"
+    expect: "exit 0 with {configured: false} before policy is recorded (status
+      is never gated); any error is not healthy"
   - step: policy
     approval: human          # the founding admin op — the human sets the outbound bounds
     run: "rc_admin configure: window, auto max, period cap written"
-    commands: ["refclerk admin configure --window-days {refund_window_days} --auto-max {auto_refund_max_usdc} --period-cap {cap_period_refunds}"]
+    commands: ["refclerk admin configure --window-days {refund_window_days} --auto-max {auto_refund_max_usdc} --period-cap {cap_period_refunds} --earnings-log {earnings_log_path}"]
     expect: "JSON with .window_days, .auto_max, .period_cap; approval token required"
 
 # ---------------------------------------------------------------------------

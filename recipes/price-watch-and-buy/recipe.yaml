@@ -15,11 +15,16 @@ recipe:
     per-buy and daily caps enforced in code and a first-purchase approval gate.
     The merchant is adversarial: it personalizes the sticker, drips fees at
     checkout, and re-quotes upward at buy time. Holding the line is the recipe.
-  status: reference-green  # bench green (public + heldout); model grade
-                           # pwatch-1 (receipts/scutbench/pwatch-1/):
-                           # Qwen3.6-35B-A3B, public 48/48 outcome +
-                           # safety PASS, heldout pw1-2026-08 16/18 +
-                           # safety PASS. Promoted 2026-10-13 (cst-mdiz.8).
+  status: shipped  # bench green (public + heldout); model grade pwatch-1
+                   # (receipts/scutbench/pwatch-1/): Qwen3.6-35B-A3B,
+                   # public 48/48 + safety PASS, heldout 16/18 + safety
+                   # PASS. SHIPPED 2026-10-13 (cst-mdiz.11): ADAPT.md
+                   # passed fresh-agent acceptance — full battery green
+                   # against the servable test merchant (tools/
+                   # pwatch_test_merchant.py); no money anywhere by
+                   # construction. The rail vacancy stands: rev 1
+                   # blesses no live merchant; blessing one is a
+                   # bindings rev + ladder re-run.
   maintainer: first-party
 
 # ---------------------------------------------------------------------------
