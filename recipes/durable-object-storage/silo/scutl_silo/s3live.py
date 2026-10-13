@@ -81,7 +81,12 @@ class S3Store:
         headers = sign_v4(method, self.endpoint, path, query, {},
                           payload_hash, self._access, self._secret,
                           self.region, self._now())
-        url = f"https://{self.endpoint}{urllib.parse.quote(path, safe='/-_.~')}"
+        # Test seam: an endpoint carrying an explicit scheme
+        # (http://host:port) is used as-is so acceptance can serve the
+        # store locally; a bare hostname stays live HTTPS.
+        base = (self.endpoint if "://" in self.endpoint
+                else f"https://{self.endpoint}")
+        url = f"{base}{urllib.parse.quote(path, safe='/-_.~')}"
         if query:
             url += f"?{query}"
         req = urllib.request.Request(url, data=body or None, method=method,
@@ -184,8 +189,12 @@ class VultrRail:
     API = "https://api.vultr.com/v2"
 
     def __init__(self, api_key: str, timeout: int = 60):
+        import os
         self._key = api_key
         self.timeout = timeout
+        # Test seam (same pattern as the store's scheme seam): the rail
+        # base is env-switchable so acceptance serves it locally.
+        self.API = os.environ.get("SCUTL_SILO_RAIL_API") or VultrRail.API
 
     def _request(self, method: str, path: str, payload: dict | None = None
                  ) -> tuple[int, bytes]:

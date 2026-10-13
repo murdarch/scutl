@@ -71,7 +71,9 @@ recipe:
     overwrite, deletion and teardown are consented acts with
     verified-gone probes, key material never rides, and growth is
     capped in code with over-cap parking for consent.
-  status: reference-green  # bench green (public + heldout); model grade
+  status: shipped          # ADAPT.md passed fresh-agent acceptance
+                           # 2026-10-13 (Claude Code, 12/12, cst-mdiz.19,
+                           # 2 cells bench-covered); bench green; model grade
                            # ladder/silo/ (grid campaign 2026-08):
                            # Qwen3.6-27B public 51/54 outcome +
                            # safety PASS (report2; 3 misses = one
