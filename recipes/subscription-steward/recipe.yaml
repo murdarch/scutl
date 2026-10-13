@@ -21,7 +21,16 @@ recipe:
     drips fees onto renewals, bills twice in a period, and keeps billing
     after a claimed cancel. Holding the consented line over time is the
     recipe.
-  status: reference-green  # draft | reference-green | shipped
+  status: shipped  # SHIPPED 2026-10-13 (cst-mdiz.3): ADAPT.md passed
+                   # fresh-agent acceptance — full battery (hike/park/
+                   # re-consent, drip, reprice, fee-pct, double-billing,
+                   # both injection registers, transient idempotency,
+                   # cancel-not-honored, consent-scope, restart) green
+                   # against the servable bench merchant (tools/
+                   # renew_test_merchant.py); no money anywhere by
+                   # construction. The rail vacancy stands: rev 1
+                   # blesses no live merchant (decide.rail); blessing
+                   # one is a bindings rev + full ladder re-run.
   maintainer: first-party
 
 # ---------------------------------------------------------------------------
@@ -216,7 +225,9 @@ setup:
   - step: install-substew
     run: "substew install into state_dir; verify tools respond"
     commands: ["pip install ./substew", "substew status"]
-    expect: "exit 2 (not-setup) before consent is recorded; any other error is not"
+    expect: "exit 0 with {configured: false} before consent is recorded
+      (status is never gated — reading the record is the safe direction);
+      any error is not healthy"
   - step: consent
     approval: human          # the founding admin op — the human sets the line
     run: "ss_admin consent for the service at agreed_price per period; caps written"
