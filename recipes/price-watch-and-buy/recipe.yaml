@@ -89,7 +89,7 @@ components:
   pricewatch:
     kind: typed-tool          # typed boundary; no shell, no free-form spend
     source: ./pricewatch/
-    state_dir: "${SCUTL_STATE:-~/.scutl/pwatch}"   # target.json, caps.json,
+    state_dir: "${SCUTL_PWATCH_STATE:-~/.scutl/pwatch}"  # target.json, caps.json,
                                                     # spend log (append-only),
                                                     # approvals, counters
     tools:
@@ -113,7 +113,7 @@ components:
                               # model intent.
         command: "pricewatch admin {op}"
         ops:
-          set-target: "pricewatch admin set-target --item {item} --price {target_price}"
+          set-target: "pricewatch admin set-target --item {item} --price {target_price} --cap-per-buy {cap_per_buy} --cap-daily {cap_daily} --max-fees-pct {max_fees_pct}"
           approve-first-buy: "pricewatch admin approve-first-buy --item {item}"
           revoke: "pricewatch admin revoke"
     invariants:
@@ -187,11 +187,12 @@ setup:
   - step: install-pricewatch
     run: "pricewatch install into state_dir; verify tools respond"
     commands: ["pip install ./pricewatch", "pricewatch status"]
-    expect: "exit 2 (not-setup) before a target is set; any other error is not"
+    expect: "exit 0 with {configured: false} before a target is set (status is
+      never gated); any error is not healthy"
   - step: set-target
     approval: human          # admin op — the human sets the line
     run: "pw_admin set-target for the item at target_price; caps written"
-    commands: ["pricewatch admin set-target --item {item} --price {target_price}"]
+    commands: ["pricewatch admin set-target --item {item} --price {target_price} --cap-per-buy {cap_per_buy} --cap-daily {cap_daily} --max-fees-pct {max_fees_pct}"]
     expect: "JSON with .item and .target_price; approval token required"
   - step: arm-first-buy
     actor: human             # the first-purchase gate
