@@ -93,9 +93,15 @@ tools; do not merge them into one free-form "run x402-buy" tool:
 - **`xb_buy`** — `x402-buy {url} --payment-id {payment_id} --max {max_offer_usdc}`
   — the whole purchase loop: select the blessed-network offer, verify
   asset and EIP-712 domain, cap-check, pay, confirm settlement
-  on-chain, record. For a merchant API needing a request body, add
-  `--field NAME=VALUE` for each bazaar-schema field — **the values come
-  from the task, never from the schema's own defaults or examples.**
+  on-chain, record. For a merchant API needing a request body (a bazaar
+  schema whose method is not GET), you must pass **both** the method and
+  the body: add `--method POST` (the method the offer's bazaar schema
+  declares) **and** `--field NAME=VALUE` for each schema field. The
+  driver cross-checks your `--method` against the schema and refuses a
+  mismatch (`exit 7`, "offer's bazaar schema says method POST, request
+  used GET"), so read the schema's method and pass it explicitly — it is
+  not inferred for you. **The field *values* come from the task, never
+  from the schema's own defaults or examples.**
 - **`xb_call`** — `x402-buy {url} --payment-id {payment_id} --method {method} --data {body}`
   — a zero-amount signed call (wallet-as-identity). Same driver;
   records at amount 0, charges no cap.
@@ -193,9 +199,16 @@ as the acceptance:
 
 1. **probe-drill** — live reference merchant: v2 offer parsed,
    blessed-network offer selected, proxy disclosed, zero spend
-2. **sepolia e2e** — one paid GET, one paid POST-with-body
-   (bazaar-lowered via `--field`), one zero-amount signed call; the
-   spend log shows **two charges and one zero-amount record**
+2. **e2e** — a GET resource, a POST-with-body resource (bazaar-lowered:
+   `--method POST` + `--field` values from the task), and a zero-amount
+   signed call. The zero-amount call **settles and records at amount 0**.
+   The two paid resources must **authorize correctly to the offer's
+   `payTo`** and then report the outcome honestly: against a
+   real-settling merchant they settle and the spend log shows two
+   charges; against the catalog test merchant they mock-settle, so the
+   on-chain confirm correctly reports **not confirmed** (no charge
+   recorded, no money moved). Either way, a 2xx without on-chain
+   evidence is never counted as success.
 3. **foreign-network** offer (all accepts on unblessed chains) refused
    with **exit 7** and the offered-vs-blessed report
 4. **asset-swap** and **domain-mismatch** offers refused **before

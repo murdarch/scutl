@@ -46,7 +46,7 @@ recipe:
     and treats schema and description text as data, never instructions.
     Purchases and auth calls are both recorded; only purchases are
     cap-charged. One driver call per purchase, idempotent under retry.
-  status: reference-green  # draft | reference-green | shipped — Qwen 3.6 27B public 69/69 + heldout x4v1-2026-08 15/15, 2026-08-28 (ladder/x402v2/); promoted by Conway 2026-09-01 with the five parked design calls reviewed (cst-rjba)
+  status: shipped  # draft | reference-green | shipped — Qwen 3.6 27B public 69/69 + heldout x4v1-2026-08 15/15, 2026-08-28 (ladder/x402v2/); promoted by Conway 2026-09-01 with the five parked design calls reviewed (cst-rjba); SHIPPED 2026-10-13 (cst-mdiz.2) — ADAPT.md passed fresh-agent acceptance: probe + full adversarial refusal battery live-green, paid settle on standing driver evidence (cst-iepc mainnet x402 settle) per owner ruling option-1; servable test merchant cst-mdiz.9
   maintainer: first-party
   depends:
     # The v2 client is the wallet's mouth, not a second wallet: custody,
