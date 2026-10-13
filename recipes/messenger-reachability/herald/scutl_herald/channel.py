@@ -24,6 +24,7 @@ as identity.
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -71,7 +72,10 @@ class ChannelClient:
             if e.code == 429 or e.code >= 500:
                 raise TransientError(f"channel {e.code}: {detail}") from None
             raise PermanentError(f"channel {e.code}: {detail}") from None
-        except (urllib.error.URLError, TimeoutError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError,
+                http.client.HTTPException) as e:
+            # A dropped connection is the send-ack-lost case: the message
+            # may STILL have delivered — transient, status before retry.
             raise TransientError(
                 f"channel unreachable: {e.reason if hasattr(e, 'reason') else e}"
             ) from None
