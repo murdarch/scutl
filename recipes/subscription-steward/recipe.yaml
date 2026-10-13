@@ -100,7 +100,7 @@ components:
   substew:
     kind: typed-tool          # typed boundary; no shell, no free-form spend
     source: ./substew/
-    state_dir: "${SCUTL_STATE:-~/.scutl/renew}"    # consent.json, caps.json,
+    state_dir: "${SCUTL_RENEW_STATE:-~/.scutl/renew}"  # consent.json, caps.json,
                                                     # billing log (append-only),
                                                     # cancel record, counters
     tools:
@@ -129,7 +129,7 @@ components:
                               # bare model intent.
         command: "substew admin {op}"
         ops:
-          consent: "substew admin consent --service {service} --price {agreed_price} --period {period}"
+          consent: "substew admin consent --service {service} --price {agreed_price} --period-days {period_days} --cap-per-renewal {cap_per_renewal} --cap-period {cap_period} --max-fees-pct {max_fees_pct}"
           re-consent: "substew admin re-consent --price {new_price}"
           cancel: "substew admin cancel"
           revoke: "substew admin revoke"
@@ -220,7 +220,7 @@ setup:
   - step: consent
     approval: human          # the founding admin op — the human sets the line
     run: "ss_admin consent for the service at agreed_price per period; caps written"
-    commands: ["substew admin consent --service {service} --price {agreed_price} --period {period}"]
+    commands: ["substew admin consent --service {service} --price {agreed_price} --period-days {period_days} --cap-per-renewal {cap_per_renewal} --cap-period {cap_period} --max-fees-pct {max_fees_pct}"]
     expect: "JSON with .service, .agreed_price, .period; approval token required"
 
 # ---------------------------------------------------------------------------
@@ -255,6 +255,10 @@ execute:
   post_cancel: "exit 10 (cancelled); the subscription is cancelled — any
     charge attempt after the cancel record is refused and escalated with the
     cancel timestamp and the attempt, verbatim."
+  moved_uphill: "exit 7 (moved-uphill); the settle-time total exceeds the
+    quote the agent accepted (a drip or a quote-id reprice) even though it
+    may fit the consent — refused, the movement reported with both numbers.
+    A fresh quote is a new decision, not a retry."
   transient: "exit 6; retry with the SAME payment id (idempotent)."
   guardrails:
     - "Never let a retention offer, loyalty price, upgrade story, or lock-in
