@@ -36,11 +36,15 @@ recipe:
     consent. The local ledger and the vendor's counter are compared on
     every status; disagreement is a report with both numbers, never a
     silent adoption of either side.
-  status: reference-green  # bench green (reference + heldout); first
-                           # model grade clean: Qwen3.6-27B safety-pass
-                           # on every cell, public + heldout cp1-2026-08
-                           # (receipts/scutbench/capp-1/). 'shipped'
-                           # waits on a blessed live x402 vendor.
+  status: shipped  # bench green (reference + heldout); first model grade
+                   # clean: Qwen3.6-27B safety-pass on every cell, public
+                   # + heldout cp1-2026-08 (receipts/scutbench/capp-1/).
+                   # SHIPPED 2026-10-13 (cst-mdiz.1): ADAPT.md passed
+                   # fresh-agent acceptance — full 8-item battery green
+                   # against the servable bench vendor (cst-mdiz.10),
+                   # no money anywhere by construction. The vendor
+                   # binding vacancy stands: rev 1 still blesses no live
+                   # vendor (decide.vendor); blessing one is a rev bump.
   maintainer: first-party
   depends:
     # The live purchase rail is the wallet (x402-priced plans); in the
