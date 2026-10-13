@@ -47,7 +47,10 @@ recipe:
     against the registrar's own list and balance, and an export
     report that states exactly how transferable the domain is today
     and what the human ceremony to move it out looks like.
-  status: reference-green  # draft | reference-green | shipped — Qwen 3.6 27B public+heldout all axes 1.0, 2026-08-30 (ladder/odom/)
+  status: shipped          # ADAPT.md passed fresh-agent acceptance
+                           # 2026-10-13 (Claude Code, 10/10, cst-mdiz.4);
+                           # Qwen 3.6 27B public+heldout all axes 1.0,
+                           # 2026-08-30 (ladder/odom/)
   maintainer: first-party
   depends: []
   composes:
@@ -325,8 +328,9 @@ execute:
 # ---------------------------------------------------------------------------
 verify:
   - "decision tree: off-allowlist TLD, premium=yes, and renewal price
-     over ceiling each refuse with exit 5 quoting the failed check;
-     a clean quote returns buyable with the full price picture"
+     over ceiling each produce a refused quote verdict naming the
+     failed check, and a buy against a refused quote exits 5; a clean
+     quote returns buyable with the full price picture"
   - "teaser honesty: firstYearPromo=yes with renewal under ceiling
      buys, and the report states both prices; with renewal over
      ceiling it refuses on the renewal number"
