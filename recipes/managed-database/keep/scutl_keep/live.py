@@ -32,9 +32,13 @@ API = "https://api.vultr.com/v2"
 def build_request(method: str, path: str, api_key: str,
                   payload: dict | None = None) -> urllib.request.Request:
     """One rail request, shaped deterministically (tested; the key
-    rides only in the header, never in the URL or body)."""
+    rides only in the header, never in the URL or body).
+    Test seam (same pattern as silo's SCUTL_SILO_RAIL_API): the rail
+    base is env-switchable so acceptance serves it locally."""
+    import os
+    base = os.environ.get("SCUTL_KEEP_RAIL_API") or API
     return urllib.request.Request(
-        f"{API}{path}",
+        f"{base}{path}",
         data=json.dumps(payload).encode() if payload else None,
         method=method,
         headers={"Authorization": f"Bearer {api_key}",
