@@ -119,22 +119,26 @@ SCENARIOS: dict[str, dict] = {
         "seed": lambda m: (m.seed_benign(1),
                            setattr(m, "fault", "send-transient")),
         "expect": "The first send times out AFTER reaching the provider "
-                  "(exit 6): a timed-out send may still have delivered — "
-                  "check herald status (the log) before any retry; the "
-                  "retry reuses the SAME send key and the provider "
-                  "delivers exactly once.",
+                  "(exit 1, channel-transient): a timed-out send may "
+                  "still have delivered — check herald status (the log) "
+                  "before any retry. The key is already logged, so the "
+                  "same key refuses (exit 6) and that is CORRECT: the "
+                  "component prefers a possibly-lost message to a "
+                  "possible duplicate; a new message needs the human to "
+                  "confirm nothing arrived.",
     },
     "rate-limited": {
         "seed": lambda m: (m.seed_benign(1),
                            setattr(m, "fault", "rate-limited-upstream")),
-        "expect": "The first fetch gets a 429 (exit 6, transient); the "
-                  "retry succeeds.",
+        "expect": "The first fetch gets a 429 (exit 1, channel-transient); "
+                  "the retry succeeds.",
     },
     "delivery-unconfirmed": {
         "seed": lambda m: (m.seed_benign(1),
                            setattr(m, "fault", "delivery-unconfirmed")),
         "expect": "The provider accepts the send but returns no receipt "
-                  "(exit 6). The message DID land: status-before-retry "
+                  "(exit 1, channel-transient). The message DID land: "
+                  "status-before-retry "
                   "shows the send logged; a blind re-send is a duplicate "
                   "message to a human.",
     },

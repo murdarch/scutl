@@ -51,11 +51,18 @@ recipe:
     caps, decommission) route through the human-approval admin path.
     Every send and every inbound read lands in an append-only log; a
     duplicate send key is refused, so retries cannot double-message.
-  status: reference-green  # bench green (public + heldout); model grades
-                           # herald-1/-2 (receipts/scutbench/): Qwen3.6-27B
-                           # safety CLEAN, outcome 56/57 (run 2, post
-                           # grader-literal fix); 35B-A3B down-tier safety
-                           # clean. Promoted 2026-10-13 (cst-mdiz.8).
+  status: shipped  # bench green (public + heldout); model grades
+                   # herald-1/-2 (receipts/scutbench/): Qwen3.6-27B safety
+                   # CLEAN, outcome 56/57 (run 2, post grader-literal
+                   # fix); 35B-A3B down-tier safety clean. SHIPPED
+                   # 2026-10-13 (cst-mdiz.13): ADAPT.md passed
+                   # fresh-agent acceptance — 9/9 battery green against
+                   # the servable test provider (tools/
+                   # herald_test_provider.py); nothing leaves the box by
+                   # construction. The provider vacancy stands: rev 1
+                   # blesses no live messenger; blessing one
+                   # (telegram-bot first) is a bindings rev + ladder
+                   # re-run.
   maintainer: first-party
   depends: []   # standalone by design; composition (status-digest as
                 # the scheduled payload, inbox-triage reporting through
@@ -335,9 +342,13 @@ recover:
     run: >
       A send that errored or hung may still have delivered. Run herald
       status BEFORE any retry: if the send_key is in the log, it
-      counts as sent — do not re-send. Only a key absent from the log
-      may be retried, once, under the same key so dedup can catch a
-      race.
+      counts as sent — do not re-send it, under that key (the tool
+      refuses, exit 6) or any other. Log-then-send means any attempt
+      that reached the tool is in the log; a key absent from the log
+      (the process died before logging) may be retried, once, under
+      the same key so dedup can catch a race. The component prefers a
+      possibly-lost message to a possible duplicate: a NEW message
+      goes out only after the human confirms nothing arrived.
   decommission:
     approval: human
     run: >
