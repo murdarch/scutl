@@ -19,6 +19,7 @@ logged, or raised.
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -64,7 +65,12 @@ class VendorClient:
             if e.code == 429 or e.code >= 500:
                 raise TransientError(f"vendor {e.code}: {detail}") from None
             raise PermanentError(f"vendor {e.code}: {detail}") from None
-        except (urllib.error.URLError, TimeoutError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError,
+                http.client.HTTPException) as e:
+            # ConnectionError/HTTPException cover the connection dying
+            # mid-exchange (e.g. RemoteDisconnected) — the ack-lost case:
+            # the request may have landed, so this must surface as
+            # transient and send the caller through status-before-retry.
             raise TransientError(
                 f"vendor unreachable: {e.reason if hasattr(e, 'reason') else e}"
             ) from None
