@@ -123,9 +123,26 @@ class DataClient:
     the pair from state; public_get is unauthenticated on purpose."""
 
     def __init__(self, state, s3_hostname: str, timeout: int = 30):
+        import os
         self.state = state
         self.host = s3_hostname
         self.timeout = timeout
+        # Test seam (same pattern as SCUTL_SWEB_API on the mgmt plane):
+        # a base URL for a PATH-STYLE S3-compatible endpoint
+        # (http://host:port -> {base}/{bucket}/{key}), so acceptance can
+        # serve the data plane locally. Unset = live virtual-host HTTPS.
+        self.base_override = os.environ.get("SCUTL_SWEB_DATA") or None
+        if self.base_override:
+            self.base_override = self.base_override.rstrip("/")
+
+    def _url(self, bucket: str, key: str) -> tuple[str, str]:
+        """(url, host-header-value) for bucket/key under either style."""
+        if self.base_override:
+            from urllib.parse import urlsplit
+            host = urlsplit(self.base_override).netloc
+            return f"{self.base_override}/{bucket}/{key}", host
+        host = f"{bucket}.{self.host}"
+        return f"https://{host}/{key}", host
 
     # -- signing (minimal SigV4, virtual-host style, UNSIGNED-PAYLOAD not
     #    used: we sign the content hash so tampering in flight fails) ----
@@ -133,7 +150,9 @@ class DataClient:
                 body: bytes = b"", headers: dict | None = None,
                 creds: dict | None = None) -> urllib.request.Request:
         creds = creds or self.state.load_s3_keys()
-        host = f"{bucket}.{self.host}"
+        url, host = self._url(bucket, key)
+        canonical_path = ("/" + key if not self.base_override
+                          else f"/{bucket}/{key}")
         now = datetime.datetime.now(datetime.timezone.utc)
         amz_date = now.strftime("%Y%m%dT%H%M%SZ")
         scope_date = now.strftime("%Y%m%d")
@@ -142,7 +161,7 @@ class DataClient:
                 "x-amz-content-sha256": payload_hash, **(headers or {})}
         signed_names = ";".join(sorted(h.lower() for h in hdrs))
         canonical = "\n".join([
-            method, "/" + key, "",
+            method, canonical_path, "",
             "".join(f"{h}:{hdrs[h].strip()}\n" for h in sorted(hdrs, key=str.lower)),
             signed_names, payload_hash])
         scope = f"{scope_date}/us-east-1/s3/aws4_request"
@@ -156,7 +175,7 @@ class DataClient:
         auth = (f"AWS4-HMAC-SHA256 Credential={creds['access']}/{scope}, "
                 f"SignedHeaders={signed_names}, Signature={sig}")
         req = urllib.request.Request(
-            f"https://{host}/{key}", data=body or None, method=method)
+            url, data=body or None, method=method)
         for h, v in hdrs.items():
             if h != "host":
                 req.add_header(h, v)
@@ -179,7 +198,7 @@ class DataClient:
         _http(self._signed("DELETE", bucket, key), self.timeout)
 
     def public_url(self, bucket: str, key: str) -> str:
-        return f"https://{bucket}.{self.host}/{key}"
+        return self._url(bucket, key)[0]
 
     def public_get(self, bucket: str, key: str) -> tuple[bytes, str]:
         """(body, served content-type) as an anonymous visitor sees it.
