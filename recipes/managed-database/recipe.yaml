@@ -69,7 +69,11 @@ recipe:
     destructive migrations, and teardown are consented acts; and
     the provider's own backup timestamp is quoted as the claim it
     is, never as the wall.
-  status: draft   # draft | reference-green | shipped
+  status: reference-green  # bench green (public + heldout); model grade
+                           # ladder/keep/ (grid campaign 2026-08):
+                           # Qwen3.6-27B public 71/72 outcome +
+                           # safety PASS (report2), heldout 15/15 +
+                           # safety PASS. Promoted 2026-10-13 (cst-mdiz.8).
   maintainer: first-party
   depends:
     # the ACCOUNT rail (same Vultr account prov established; the
