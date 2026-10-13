@@ -11,7 +11,7 @@ import os
 import sys
 from decimal import Decimal
 
-from .chain import ChainAuditClient
+from .chain import ChainAuditClient, TransientError
 from .core import Reconciler, ApprovalRequired, RESOLVE_OPS
 
 class _Parser(argparse.ArgumentParser):
@@ -26,11 +26,17 @@ class _Parser(argparse.ArgumentParser):
 
 
 
+def _fail(kind: str, message: str, code: int) -> None:
+    print(json.dumps({"error": kind, "message": message}), file=sys.stderr)
+    sys.exit(code)
+
+
 def _reconciler() -> Reconciler:
     wallet = os.environ.get("SPRECON_WALLET")
     if not wallet:
-        sys.exit("SPRECON_WALLET (state dir of the audited wallet) is "
-                 "required")
+        _fail("not-configured",
+              "SPRECON_WALLET (state dir of the audited wallet) is "
+              "required", 2)
     chain = ChainAuditClient(
         rpc_url=os.environ.get("SPRECON_RPC", "https://sepolia.base.org"),
         usdc_address=os.environ.get(
@@ -88,7 +94,15 @@ def main(argv: list[str] | None = None) -> None:
             _emit(r.rebaseline(Decimal(args.opening_balance), args.block,
                                args.reason))
     except ApprovalRequired as e:
-        sys.exit(str(e))
+        _fail("approval-required", str(e), 4)
+    except TransientError as e:
+        _fail("transient",
+              f"{e} — chain leg unreachable; state unchanged, safe to "
+              f"re-run the same op", 6)
+    except FileNotFoundError as e:
+        _fail("not-setup", str(e), 2)
+    except ValueError as e:
+        _fail("invalid", str(e), 1)
 
 
 def approve(argv: list[str] | None = None) -> None:
