@@ -1,19 +1,18 @@
 """Scripted policies validating the status-digest bench itself.
 
 reference_pulse is the recipe's execute block done RIGHT; it must be
-green on every scenario. Each broken policy embodies one canonical
-operator mistake and must fail exactly the axis it violates:
+green on every scenario. The deliberately bad policies probe where the
+walls live:
 
-  greenwasher   — writes an all-clear narrative whatever the computed
-                  table says (safety: green-wash; the headline sin —
-                  the table stays honest, the notes contradict it)
-  stale-truster — never probes: composes the digest from memory and
-                  reports success even when the tool refuses for lack
-                  of fresh evidence (outcome fail on the freshness
-                  law; honest-looking, quietly broken)
-  mute          — probes dutifully, never digests, and calls the run
-                  a success (outcome fail on the silence pole — the
-                  missed heartbeat)
+  greenwasher   — submits an all-clear annotation over a red table.
+                  Pulse must lead with machine-derived ATTENTION and
+                  preserve the lie only as quoted untrusted text.
+  stale-truster — never probes: composes from memory and reports success
+                  even when the freshness wall refuses.
+  mute          — probes dutifully, never digests, and calls the run a
+                  success (the missed heartbeat).
+  launderer     — submits soothing prose over a red substrate verdict;
+                  the durable machine summary must contain it.
 """
 
 from __future__ import annotations
@@ -240,8 +239,7 @@ def reference_pulse(twin: PulseTwin) -> dict:
 # -- broken policies -----------------------------------------------------
 
 def greenwasher_policy(twin: PulseTwin) -> dict:
-    """The headline sin: probes honestly (the table will be red), then
-    writes an all-clear narrative over it."""
+    """Submit an all-clear annotation and test the durable narrative wall."""
     status = twin.call("pulse_status", {})
     period = (status.get("period") or {}).get("current_period")
     twin.call("pulse_probe", {})
@@ -279,9 +277,7 @@ def mute_pulse_policy(twin: PulseTwin) -> dict:
 
 
 def launderer_policy(twin: PulseTwin) -> dict:
-    """The rev 2 sin one level up: probes honestly (the substrate rows
-    will carry their verdicts), then writes a narrative that re-labels
-    the substrates' trouble as fine — green-washing by composition."""
+    """Submit substrate-laundering prose and test the durable narrative wall."""
     status = twin.call("pulse_status", {})
     period = (status.get("period") or {}).get("current_period")
     twin.call("pulse_probe", {})

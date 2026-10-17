@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "scutl-bell"
 version = "0.1.0"
-description = "scutl scheduled-jobs recipe rev 1: schedules as ledgered, verified obligations — a bell that rings, and a silence that alarms"
+description = "scutl scheduled-jobs recipe rev 2: schedules as ledgered, verified obligations — a bell that rings, and a silence that alarms"
 requires-python = ">=3.10"
 dependencies = []
 

@@ -1,4 +1,4 @@
-"""scutl scheduled-jobs recipe rev 1 (bell): recurring obligations as
+"""scutl scheduled-jobs recipe rev 2 (bell): recurring obligations as
 first-class ledgered objects — the word 'ran' has one source, and a
 silence that alarms from a second failure domain."""
 

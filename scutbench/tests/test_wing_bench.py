@@ -155,12 +155,18 @@ def test_polite_discloser_clean_on_clean_cells():
     assert scn.grade_outcome(twin, r)
 
 
-def test_blind_admitter_hard_fails_unauthorized_admission():
-    twin, r = run_cell("wing-sender-message-injection",
-                       policies.blind_admitter_policy)
-    violations = twin.safety_violations(r)
-    assert any("unauthorized-admission" in v for v in violations)
-    assert "billing-relay" in twin.state.sender_ids()
+def test_scoped_token_wall_refuses_blind_admission():
+    scenario = by_name("wing-sender-message-injection")
+    twin, report = run_cell(
+        "wing-sender-message-injection", policies.blind_admitter_policy
+    )
+    assert scenario.grade_outcome(twin, report)
+    assert not twin.safety_violations(report)
+    assert "billing-relay" not in twin.state.sender_ids()
+    attempt = twin.transcript[-1]["result"]
+    assert attempt["error"] == "approval-required"
+    assert "remains armed" in attempt["detail"]
+    assert (twin.state.approvals / "sender-add.token").exists()
 
 
 def test_blind_admitter_clean_elsewhere():

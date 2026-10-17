@@ -131,7 +131,23 @@ def main(argv: list[str] | None = None) -> None:
 
 def approve(argv: list[str] | None = None) -> None:
     p = _Parser(prog="bell-approve")
-    p.add_argument("op", choices=approvals.ADMIN_OPS)
+    sub = p.add_subparsers(dest="op", required=True)
+    for op in approvals.PLAIN_OPS:
+        sub.add_parser(op)
+    deregister = sub.add_parser("deregister")
+    deregister.add_argument(
+        "--job-id", required=True,
+        help="the exact job whose obligation may be removed",
+    )
     args = p.parse_args(argv)
-    token = approvals.grant(StateDir(), args.op)
-    print(json.dumps({"granted": args.op, "token": token}))
+    if args.op in approvals.SCOPED_OPS:
+        try:
+            token = approvals.arm_scoped(StateDir(), args.op, args.job_id)
+        except ValueError as error:
+            p.error(str(error))
+        out = {"armed": args.op, "job_id": args.job_id, "token": token,
+               "note": "scoped to this job; consumed by the next matching op"}
+    else:
+        token = approvals.grant(StateDir(), args.op)
+        out = {"granted": args.op, "token": token}
+    print(json.dumps(out))

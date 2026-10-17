@@ -62,8 +62,8 @@ def main(argv: list[str] | None = None) -> None:
                     help="the CURRENT period key (pulse status names it); "
                          "past periods refuse — there is no backfill")
     dp.add_argument("--notes-file", required=True,
-                    help="your narrative, carried verbatim in a separate "
-                         "field; it cannot alter any computed field")
+                    help="operator annotation; JSON-quoted beneath the "
+                         "machine-generated CLEAR/ATTENTION verdict")
 
     rp = sub.add_parser("read")
     rp.add_argument("--id", required=True)

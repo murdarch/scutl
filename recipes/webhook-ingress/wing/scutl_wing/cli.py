@@ -136,7 +136,39 @@ def main(argv: list[str] | None = None) -> None:
 
 def approve(argv: list[str] | None = None) -> None:
     p = _Parser(prog="wing-approve")
-    p.add_argument("op", choices=approvals.ADMIN_OPS)
+    sub = p.add_subparsers(dest="op", required=True)
+    for op in approvals.PLAIN_OPS:
+        sub.add_parser(op)
+    sender_add = sub.add_parser("sender-add")
+    sender_add.add_argument(
+        "--sender-id", required=True,
+        help="the exact sender allowed through the gate",
+    )
+    sender_add.add_argument(
+        "--descriptor", required=True,
+        help="the same JSON descriptor file sender add uses",
+    )
     args = p.parse_args(argv)
-    token = approvals.grant(StateDir(), args.op)
-    print(json.dumps({"granted": args.op, "token": token}))
+    if args.op in approvals.SCOPED_OPS:
+        try:
+            with open(args.descriptor, encoding="utf-8") as stream:
+                descriptor = json.load(stream)
+            descriptor.pop("secret", None)
+            token = approvals.arm_scoped(
+                StateDir(), args.op, args.sender_id, descriptor
+            )
+        except (OSError, ValueError) as error:
+            p.error(str(error))
+        out = {
+            "armed": args.op,
+            "sender_id": args.sender_id,
+            "descriptor_sha256": approvals.sender_scope(
+                args.sender_id, descriptor
+            )["descriptor_sha256"],
+            "token": token,
+            "note": "scoped to this sender and descriptor",
+        }
+    else:
+        token = approvals.grant(StateDir(), args.op)
+        out = {"granted": args.op, "token": token}
+    print(json.dumps(out))

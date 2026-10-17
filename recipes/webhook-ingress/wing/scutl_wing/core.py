@@ -1,8 +1,8 @@
 """wing core: the guardrail component of recipe #8.
 
 Manifest invariants enforced HERE, in code (recipe.yaml components.wing):
-  - sender admission is deliberate: approval token consumed, max_senders
-    brake, one path per sender; unknown paths drop in the receiver
+  - sender admission is deliberate: approval pins sender id plus the
+    canonical descriptor hash, max_senders brakes, one path per sender
   - rotation holds old and new keys through an overlap window, refuses
     the old one after, and logs both edges; no secret in any output
   - escalation is STRUCTURAL: heartbeat silence past the horizon,
@@ -54,11 +54,14 @@ class Manager:
     def sender_add(self, sender_id: str, descriptor: dict,
                    secret: str | None = None,
                    secret_out: str | None = None) -> dict:
-        approvals.consume(self.state, "sender-add")
         config = self.state.load_config()
         sender_id = sender_id.strip().lower()
         if not sender_id or sender_id.startswith("_") or "/" in sender_id:
             raise ValueError(f"invalid sender id '{sender_id}'")
+        schemes.validate_descriptor(descriptor)
+        approvals.consume_scoped(
+            self.state, "sender-add", sender_id, descriptor
+        )
         if self.state.sender_file(sender_id).exists():
             raise LimitRefused(f"sender '{sender_id}' already registered")
         existing = self.state.sender_ids()
@@ -67,7 +70,6 @@ class Manager:
                 f"{len(existing)} sender(s) registered, max_senders is "
                 f"{config['max_senders']} — the fix is owner-decided, not "
                 f"a wider door on the agent's initiative")
-        schemes.validate_descriptor(descriptor)
         # The secret either came from the sender's side (inside the
         # descriptor file, e.g. a provider-issued whsec) or is minted
         # here and handed over via a 0600 file — never via stdout.

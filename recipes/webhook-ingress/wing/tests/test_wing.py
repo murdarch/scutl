@@ -1,4 +1,4 @@
-"""Acceptance tests for the wing component (recipe #8 rev 1).
+"""Acceptance tests for the wing component (recipe #8 rev 2).
 
 Each block maps to a manifest verify item (recipes/webhook-ingress/
 recipe.yaml). The 'twin drives the wire' pattern: tests play senders —
@@ -39,7 +39,9 @@ def rig(tmp_path):
 
 def add_sender(state, mgr, sid="acme", descriptor=None, secret=SECRET,
                secret_out=None):
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", sid, dict(descriptor or STANDARD_WEBHOOKS)
+    )
     return mgr.sender_add(sid, dict(descriptor or STANDARD_WEBHOOKS),
                           secret=secret, secret_out=secret_out)
 
@@ -342,11 +344,60 @@ def test_sender_add_requires_approval(rig):
         mgr.sender_add("acme", dict(STANDARD_WEBHOOKS), secret=SECRET)
 
 
+def test_sender_add_approval_is_scoped_to_sender(rig):
+    state, mgr, clock = rig
+    approvals.arm_scoped(
+        state, "sender-add", "some-other-sender", dict(STANDARD_WEBHOOKS)
+    )
+    with pytest.raises(ApprovalRequired, match="some-other-sender.*acme"):
+        mgr.sender_add("acme", dict(STANDARD_WEBHOOKS), secret=SECRET)
+    assert "acme" not in state.sender_ids()
+    assert (state.approvals / "sender-add.token").exists()
+
+
+def test_sender_add_approval_is_scoped_to_descriptor(rig):
+    state, mgr, clock = rig
+    approved = dict(STANDARD_WEBHOOKS)
+    actual = {**approved, "sig_header": "X-Different-Signature"}
+    approvals.arm_scoped(state, "sender-add", "acme", approved)
+    with pytest.raises(ApprovalRequired, match="stale descriptor"):
+        mgr.sender_add("acme", actual, secret=SECRET)
+    assert "acme" not in state.sender_ids()
+    assert not (state.approvals / "sender-add.token").exists()
+
+
+
+def test_approve_cli_arms_exact_sender_descriptor(
+    rig, tmp_path, monkeypatch, capsys
+):
+    from scutl_wing.cli import approve
+
+    state, mgr, clock = rig
+    descriptor = tmp_path / "sender.json"
+    descriptor.write_text(json.dumps(STANDARD_WEBHOOKS))
+    monkeypatch.setenv("SCUTL_WING_STATE", str(state.root))
+    approve([
+        "sender-add",
+        "--sender-id",
+        "acme",
+        "--descriptor",
+        str(descriptor),
+    ])
+    armed = json.loads(capsys.readouterr().out)
+    assert armed["sender_id"] == "acme"
+    assert len(armed["descriptor_sha256"]) == 64
+    assert mgr.sender_add(
+        "acme", dict(STANDARD_WEBHOOKS), secret=SECRET
+    )["registered"] == "acme"
+
+
 def test_max_senders_brake(rig):
     state, mgr, clock = rig
     for i in range(4):
         add_sender(state, mgr, sid=f"s{i}")
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "s4", dict(STANDARD_WEBHOOKS)
+    )
     with pytest.raises(LimitRefused, match="max_senders"):
         mgr.sender_add("s4", dict(STANDARD_WEBHOOKS), secret=SECRET)
 
@@ -354,17 +405,23 @@ def test_max_senders_brake(rig):
 def test_duplicate_and_reserved_ids_refused(rig):
     state, mgr, clock = rig
     add_sender(state, mgr)
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "acme", dict(STANDARD_WEBHOOKS)
+    )
     with pytest.raises(LimitRefused, match="already registered"):
         mgr.sender_add("acme", dict(STANDARD_WEBHOOKS), secret=SECRET)
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "_sneaky", dict(STANDARD_WEBHOOKS)
+    )
     with pytest.raises(ValueError):
         mgr.sender_add("_sneaky", dict(STANDARD_WEBHOOKS), secret=SECRET)
 
 
 def test_bad_descriptor_refused(rig):
     state, mgr, clock = rig
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "x", {"family": "vibes"}
+    )
     with pytest.raises(BadDescriptor):
         mgr.sender_add("x", {"family": "vibes"}, secret=SECRET)
 
@@ -385,10 +442,14 @@ def test_a_path_accepts_only_its_own_sender(rig):
 
 def test_minted_secret_reaches_file_not_transcript(rig, tmp_path):
     state, mgr, clock = rig
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "nokey", dict(STANDARD_WEBHOOKS)
+    )
     with pytest.raises(ValueError, match="secret-out"):
         mgr.sender_add("nokey", dict(STANDARD_WEBHOOKS))
-    approvals.grant(state, "sender-add")
+    approvals.arm_scoped(
+        state, "sender-add", "minted", dict(STANDARD_WEBHOOKS)
+    )
     out = mgr.sender_add("minted", dict(STANDARD_WEBHOOKS),
                          secret_out=str(tmp_path / "minted.key"))
     secret = (tmp_path / "minted.key").read_text()

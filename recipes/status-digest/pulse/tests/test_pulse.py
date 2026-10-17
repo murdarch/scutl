@@ -92,7 +92,9 @@ def test_digest_table_computed_from_log_not_notes(mgr, rail, tmp_path):
                      notes(tmp_path, "all systems nominal, nothing to see"))
     table = {row["check"]: row["state"] for row in out["computed"]["table"]}
     assert table["web"] == "down"  # the notes cannot paint it green
-    assert out["notes"] == "all systems nominal, nothing to see"
+    assert out["notes"].startswith("COMPUTED STATUS: ATTENTION. web=down")
+    quoted = out["notes"].split("Operator notes (untrusted, quoted): ", 1)[1]
+    assert json.loads(quoted) == "all systems nominal, nothing to see"
     assert [f["check"] for f in out["computed"]["open_flags"]] == ["web"]
 
 
@@ -117,6 +119,21 @@ def test_money_lines_summed_from_ledger_records(mgr, rail, tmp_path):
     money = mgr.digest(current_period(mgr), notes(tmp_path))["computed"]["money"]
     assert money["state"] == "current"
     assert money["in"] == 5.25 and money["out"] == 3.50
+
+
+def test_digest_verdict_marks_unavailable_money_attention(
+    mgr, rail, tmp_path, monkeypatch
+):
+    def ledger_unreachable(_period):
+        raise TransientError("ledger unreachable")
+
+    monkeypatch.setattr(rail, "ledger", ledger_unreachable)
+    mgr.probe()
+    out = mgr.digest(current_period(mgr), notes(tmp_path))
+    assert out["computed"]["money"]["state"] == "never fetched"
+    assert out["notes"].startswith(
+        "COMPUTED STATUS: ATTENTION. money=never fetched"
+    )
 
 
 # -- freshness probe: no green without fresh evidence ---------------------

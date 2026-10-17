@@ -133,11 +133,12 @@ building the first three taught us people actually ask for.
 8. **webhook-ingress** — a stable HTTPS endpoint the agent can hand
    out and answer; signature verification in code, replay windows,
    the "never trust the body" discipline from paid-service applied
-   inbound. *Manifest drafted (rev 1, cst-hb19): the catalog's first
-   moneyless entry — the blast radius is information and
-   availability, not spend. The endpoint is agent-owned end-to-end
-   (prov-rail instance behind the paid-service Caddy ingress, name
-   in the sweb subzone or odom apex — URL stability lives in DNS);
+   inbound. *Manifest rev 2 draft (cst-hb19; safety hardening
+   cst-mdiz.15): the catalog's first moneyless entry — the blast
+   radius is information and availability, not spend. The endpoint is
+   agent-owned end-to-end (prov-rail instance behind the paid-service
+   Caddy ingress, name in the sweb subzone or odom apex — URL
+   stability lives in DNS);
    managed relays are deferred by finding, not omission: the 2026
    relays verify source signatures themselves and forward, which
    un-codes the recipe's spine. The verifier is a per-sender scheme
@@ -150,16 +151,14 @@ building the first three taught us people actually ask for.
    proves the ear, silence escalates structurally. Seams: Porkbun
    domain.expiring is the first consumer (#7's open question 3
    lands here); #28 gets its first concrete instance in secret
-   rotation. Component (scutl_wing, 31 tests — wall-ordering
-   finding: the dedup ledger outranks the skew wall, because an
-   exact replay carries its original now-stale timestamp) and
-   mocked-twin bench (scutbench/wing: 19 public cells zero skips,
-   5 broken policies incl. blind-admitter — content-as-admission-
-   authority isolated on the safety monitor — held-out round
-   wing1-2026-08 with a replay-under-silence compound; the twin
-   backs the public URL with a real loopback server, so the
-   heartbeat cells prove the ear end-to-end) landed;
-   reference-green public + heldout. Grade next.
+   rotation. Component (scutl_wing, 34 tests) and mocked-twin bench
+   (scutbench/wing: 19 public cells zero skips, held-out round
+   wing1-2026-08, real loopback heartbeat) landed reference-green.
+   Safety hardening cst-mdiz.15 binds sender-add approval to the exact
+   sender id plus canonical descriptor hash: a ticket cannot borrow a
+   dormant token for another admission, and blind-admitter attempts
+   now refuse without changing the roster. Qwen public-pressure
+   regrade remains required; recipe stays draft.
    Recon: docs/webhook-ingress-recon.md.*
 
 ### Substrate (things every other recipe leans on)
@@ -213,8 +212,8 @@ building the first three taught us people actually ask for.
 11. **scheduled-jobs** — durable cron for agents: register, verify
     firing, alert on silence. Most "my agent forgot" failures are
     really "nothing woke it."
-    *In progress (cst-j6j8, 2026-08-30): recon + manifest rev 1
-    draft (recipes/scheduled-jobs/, id `bell`). Organizing
+    *In progress: manifest rev 2 draft (cst-j6j8; safety hardening
+    cst-mdiz.15; recipes/scheduled-jobs/, id `bell`). Organizing
     find: a host cannot witness its own silence, so the wall spans
     two failure domains — an agent-owned firing ledger (wing dedup
     applied to executions; only source of the word "ran") plus an
@@ -229,21 +228,21 @@ building the first three taught us people actually ask for.
     inversion wanted; native upsert registration; rid= run-id join
     key; BSD-3 self-host escape hatch). Second moneyless entry
     after wing — live cost is an email address. Graded sin:
-    green-washing silence; alarm-silencing (deregister to stop the
-    noise) inherits the door-unlocked trick.
-    Component (scutl_bell, 33 tests) and mocked-twin bench
-    (scutbench/bell: 18 public cells zero skips, 5 broken policies
-    incl. catchup-launderer — the label-ironing sin isolated on the
-    transparency axis — held-out round bell1-2026-08). A design find
-    landed mid-build: a late reconciliation must carry its own gap
-    as a breach in its own ledger line, or running verify HEALS the
-    deafness it should be reporting.
+    green-washing silence and alarm-silencing. Component (scutl_bell,
+    36 tests) and mocked-twin bench (scutbench/bell: 18 public cells
+    zero skips, held-out bell1-2026-08) landed reference-green. Safety
+    hardening cst-mdiz.15 binds deregistration approval to the exact
+    job id, registered-at, spec hash, and generation nonce; another
+    job's token cannot silence a noisy obligation. A late
+    reconciliation carries its own gap as a breach, or verify would
+    heal the deafness it should report. Qwen public+heldout pressure
+    regrade remains required; recipe stays draft.
     Recon: docs/scheduled-jobs-recon.md.*
 12. **uptime-monitoring** — watch its own services (the paid-service
     daemon, the website) and escalate honestly — no green-washing a
     down service in reports.
-    *In progress (cst-8fg4, 2026-08-30): recon + manifest rev 1
-    draft (recipes/uptime-monitoring/, id `beacon`). Bell's sibling
+    *In progress: manifest rev 2 draft (cst-8fg4; safety hardening
+    cst-mdiz.15; recipes/uptime-monitoring/, id `beacon`). Bell's sibling
     inversion: a host cannot witness its own REACHABILITY — "up" is
     two claims from two vantage points (process answers here /
     customers can reach it), so the wall spans the same two failure
@@ -257,15 +256,16 @@ building the first three taught us people actually ask for.
     and bc_verify ride bell — beacon adds no second scheduler.
     Third moneyless entry; live cost is one more cardless signup
     joining the toll-booth batch beside bell's witness.
-    Component (scutl_beacon, 42 tests) and mocked-twin bench
+    Component (scutl_beacon, 45 tests) and mocked-twin bench
     (scutbench/beacon: 24 public cells zero skips over all 19 wire
-    modes, average-hider isolated on the transparency axis,
-    held-out round beacon1-2026-08). The design find landed in the
-    register path: convergence must read the prober BEFORE
-    re-upserting, because silently restoring a drifted monitor
-    launders the evidence that someone moved the watch — the
-    honest register REFUSES over drift and leaves it visible.
-    Recon: docs/uptime-monitoring-recon.md.*
+    modes, held-out beacon1-2026-08) landed reference-green. Safety
+    hardening cst-mdiz.15 binds deregistration approval to exact target
+    id, registered-at, spec hash, and generation nonce; another watch's
+    token cannot silence a noisy target. Convergence still reads
+    the prober BEFORE re-upserting so a quiet repair cannot launder
+    moved-watch evidence.
+    Qwen public+heldout pressure regrade remains required; recipe stays
+    draft. Recon: docs/uptime-monitoring-recon.md.*
 13. **gpu-rental** — rent inference-grade GPU by the hour (our own
     ladder runs on exactly this rail); the stakes are provision-vultr
     times ten per hour, so the destroy+verify discipline is the whole
@@ -332,16 +332,15 @@ building the first three taught us people actually ask for.
     money in and out, obligations due, anomalies flagged. Composes
     scheduled-jobs, uptime-monitoring, and spend-reconciliation into
     the artifact owners actually want to receive; green-washing a
-    down service is the graded sin. *Built — rev 2 (pulse)
-    reference-green on the mocked ladder: rev 1 shipped bench-first
-    with an honest rail vacancy; rev 2 blesses bell (#11) and beacon
-    (#12) as first-party evidence substrates, and the composition
-    wall is its organizing find: a digest of digests must not
-    launder its substrates' honesty labels — labels carry verbatim,
-    unreachable is red not absent, pulse reads report never verify
-    (a read must not heal the deafness it reports), and demands
-    nested two hops deep are quoted, never obeyed. Heldout
-    pl2-2026-08. Model grades parked on pod spend (cst-u3eu).*
+    down service is the graded sin. *Built — rev 3 (pulse),
+    reference-green on the mocked ladder. Rev 2 blessed bell (#11)
+    and beacon (#12) as first-party evidence substrates; labels carry
+    verbatim, unreachable is red not absent, and pulse reads report
+    never verify. Safety hardening cst-mdiz.15 moves the durable
+    narrative behind the same wall: pulse writes a machine-derived
+    CLEAR/ATTENTION verdict and JSON-quotes operator prose beneath it,
+    so an all-clear instruction cannot become the recorded verdict.
+    Qwen vigilance regrade remains required; recipe stays draft.*
 24. **capability-purchase** — buy access to a paid API under caps,
     store the key properly, meter own usage against the purchased
     plan. Key material never appears in a transcript; overage

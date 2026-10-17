@@ -1,4 +1,4 @@
-"""Acceptance tests for the bell component (recipe #11 rev 1).
+"""Acceptance tests for the bell component (recipe #11 rev 2).
 
 Each block maps to a manifest verify item (recipes/scheduled-jobs/
 recipe.yaml). The fakes implement contracts.wire: FakeSystemd owns the
@@ -421,7 +421,7 @@ def test_foreign_rid_is_custody_alarm_not_success(rig):
 def test_zombie_fire_refuses_and_leaves_evidence(rig):
     state, mgr, clock, sysd, wit = rig
     register(mgr)
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pulse")
     mgr.deregister("pulse")
     tick(clock, 600)            # the zombie rings after the funeral
     with pytest.raises(LimitRefused, match="zombie"):
@@ -436,7 +436,7 @@ def test_stubborn_units_after_deregister_breach_as_zombie_timer(rig):
     state, mgr, clock, sysd, wit = rig
     register(mgr)
     sysd.stubborn = True
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pulse")
     out = mgr.deregister("pulse")
     assert out["units_removed"] is False
     rep = mgr.report()
@@ -463,12 +463,52 @@ def test_deregister_without_approval_refuses(rig):
     assert not wit.checks["pulse"].get("deleted")
 
 
+def test_deregister_approval_is_scoped_to_job(rig):
+    state, mgr, clock, sysd, wit = rig
+    register(mgr)
+    mgr.register("other-job", ["true"], "every:600")
+    approvals.arm_scoped(state, "deregister", "other-job")
+    with pytest.raises(ApprovalRequired, match="other-job.*pulse"):
+        mgr.deregister("pulse")
+    assert not state.load_job("pulse").get("tombstoned")
+    assert (state.approvals / "deregister.token").exists()
+
+
+def test_deregister_approval_is_bound_to_job_generation(rig):
+    state, mgr, clock, sysd, wit = rig
+    register(mgr)
+    approvals.arm_scoped(state, "deregister", "pulse")
+    token = state.approvals / "deregister.token"
+    stale_token = token.read_text()
+    mgr.deregister("pulse")
+    register(mgr)  # same id + spec + frozen clock, new explicit generation
+    token.write_text(stale_token)
+    with pytest.raises(ApprovalRequired, match="stale.*registration"):
+        mgr.deregister("pulse")
+    assert not state.load_job("pulse").get("tombstoned")
+    assert not token.exists()
+
+
+
+def test_approve_cli_arms_exact_job(rig, monkeypatch, capsys):
+    from scutl_bell.cli import approve
+
+    state, mgr, clock, sysd, wit = rig
+    register(mgr)
+    monkeypatch.setenv("SCUTL_BELL_STATE", str(state.root))
+    approve(["deregister", "--job-id", "pulse"])
+    armed = json.loads(capsys.readouterr().out)
+    assert armed["job_id"] == "pulse"
+    assert "spec_hash" not in armed
+    assert mgr.deregister("pulse")["deregistered"] == "pulse"
+
+
 def test_deregister_with_approval_tombstones_and_reports_blast(rig):
     state, mgr, clock, sysd, wit = rig
     register(mgr)
     tick(clock, 600)
     mgr.fire("pulse")
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pulse")
     out = mgr.deregister("pulse")
     assert out["lifetime_firings"] == 1 and out["last_fired"]
     assert out["units_removed"] and out["witness_deleted"]
@@ -481,7 +521,7 @@ def test_deregister_with_approval_tombstones_and_reports_blast(rig):
 def test_revival_after_tombstone_is_a_new_registration(rig):
     state, mgr, clock, sysd, wit = rig
     register(mgr)
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pulse")
     mgr.deregister("pulse")
     r = register(mgr)
     assert r.get("registered") == "pulse"
@@ -521,7 +561,7 @@ def test_no_secret_in_any_output(rig):
     tick(clock, 600)
     outputs = [mgr.fire("pulse"), mgr.verify(), mgr.report(),
                mgr.status()]
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pulse")
     outputs.append(mgr.deregister("pulse"))
     blob = json.dumps(outputs)
     assert PING_KEY not in blob

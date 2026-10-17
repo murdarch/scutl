@@ -6,10 +6,10 @@ Layout (state_dir, default ~/.scutl/bell, dir mode 0700):
                    witness_api_base, witness_ping_base — written only by
                    human-approved admin ops                        (0600)
   jobs/            one JSON per registered job: argv, normalized
-                   schedule, cadence, grace, spec hash, witness uuid,
-                   optional tombstone; ids starting with '_' are
-                   internal (the verifier's own bell) and never count
-                   against max_jobs                                (0600)
+                   schedule, cadence, grace, spec hash, generation
+                   nonce, witness uuid, optional tombstone; ids
+                   starting with '_' are internal (the verifier's own
+                   bell) and never count against max_jobs           (0600)
   firing.log       append-only JSONL: register / fire / fire-witness /
                    zombie-fire / deregister events. THE ONLY SOURCE of
                    the word 'ran' (manifest firing-record leaf); the

@@ -9,8 +9,8 @@ Layout (state_dir, default ~/.scutl/beacon, dir mode 0700):
                    (a parameter, never a constant) — written only by
                    human-approved admin ops                        (0600)
   targets/         one JSON per registered target: url, sentinel,
-                   prober cadence, local cadence, spec hash, monitor id,
-                   optional tombstone                              (0600)
+                   prober cadence, local cadence, spec hash, generation
+                   nonce, monitor id, optional tombstone             (0600)
   probe.log        append-only JSONL: register / probe / zombie-probe /
                    deregister events. THE ONLY SOURCE of local truth
                    (manifest up-truth leaf: the inside half of 'up');

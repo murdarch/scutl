@@ -302,7 +302,7 @@ def test_probe_connection_failure_is_an_observation(rig):
 def test_zombie_probe_refuses_and_ledgers(rig):
     mgr, state, clock, local, prober = rig
     reg(mgr)
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pserv")
     mgr.deregister("pserv")
     with pytest.raises(LimitRefused):
         mgr.probe("pserv")
@@ -430,7 +430,7 @@ def test_zombie_watch_after_deregister(rig):
     mgr, state, clock, local, prober = rig
     fresh_green(rig)
     mid = state.load_target("pserv")["monitor_id"]
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pserv")
     mgr.deregister("pserv")
     # twin resurrects the monitor: the watch outlived its tombstone
     prober.monitors[mid] = {
@@ -567,24 +567,65 @@ def test_deregister_requires_approval(rig):
         mgr.deregister("pserv")
 
 
+def test_deregister_approval_is_scoped_to_target(rig):
+    mgr, state, clock, local, prober = rig
+    fresh_green(rig)
+    mgr.register("some-other-target", "https://other.example.test/health",
+                 "other-sentinel", 300, 300)
+    approvals.arm_scoped(state, "deregister", "some-other-target")
+    with pytest.raises(ApprovalRequired, match="some-other-target.*pserv"):
+        mgr.deregister("pserv")
+    assert not state.load_target("pserv").get("tombstoned")
+    assert (state.approvals / "deregister.token").exists()
+
+
+def test_deregister_approval_is_bound_to_target_generation(rig):
+    mgr, state, clock, local, prober = rig
+    fresh_green(rig)
+    approvals.arm_scoped(state, "deregister", "pserv")
+    token = state.approvals / "deregister.token"
+    stale_token = token.read_text()
+    mgr.deregister("pserv")
+    reg(mgr)  # same id + spec + frozen clock, new explicit generation
+    token.write_text(stale_token)
+    with pytest.raises(ApprovalRequired, match="stale.*registration"):
+        mgr.deregister("pserv")
+    assert not state.load_target("pserv").get("tombstoned")
+    assert not token.exists()
+
+
+
+def test_approve_cli_arms_exact_target(rig, monkeypatch, capsys):
+    from scutl_beacon.cli import approve
+
+    mgr, state, clock, local, prober = rig
+    fresh_green(rig)
+    monkeypatch.setenv("SCUTL_BEACON_STATE", str(state.root))
+    approve(["deregister", "--target-id", "pserv"])
+    armed = json.loads(capsys.readouterr().out)
+    assert armed["target_id"] == "pserv"
+    assert "spec_hash" not in armed
+    assert mgr.deregister("pserv")["deregistered"] == "pserv"
+
+
 def test_deregister_blast_radius_and_tombstone(rig):
     mgr, state, clock, local, prober = rig
     fresh_green(rig)
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pserv")
     out = mgr.deregister("pserv")
     assert out["lifetime_probes"] == 1 and out["monitor_detached"]
     assert prober.paused_calls and prober.deleted_calls
     assert state.load_target("pserv")["tombstoned"]
     assert [e for e in state.read_probes() if e["event"] == "deregister"]
     with pytest.raises(ValueError):
-        approvals.grant(state, "deregister")
+        approvals.arm_scoped(state, "deregister", "pserv")
         mgr.deregister("pserv")
 
 
 def test_deregister_prober_dark_recorded_honestly(rig):
     mgr, state, clock, local, prober = rig
     fresh_green(rig)
-    approvals.grant(state, "deregister")
+    approvals.arm_scoped(state, "deregister", "pserv")
     prober.dark = True
     out = mgr.deregister("pserv")
     assert out["monitor_detached"] is False

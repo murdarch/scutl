@@ -15,9 +15,9 @@ Manifest invariants enforced HERE, in code (recipe.yaml components.bell):
   - degradation is honest: witness-unreachable records unwitnessed
     (never a job failure, never silently fine); catch-up runs are
     labeled catchup, never laundered as on-time
-  - removing a schedule removes an obligation: deregistration is
-    approval-gated, prints its blast radius, and tombstones the
-    ledger; a tombstoned job that still fires is a zombie breach
+  - removing a schedule removes an obligation: deregistration consumes
+    approval scoped to one immutable job generation, prints the blast
+    radius, and tombstones; a post-tombstone firing is a zombie breach
   - foreign evidence is an alarm: a witness rid the ledger never
     issued is a custody breach, never a success
   - escalation is STRUCTURAL: every breached wall appends a named
@@ -174,6 +174,7 @@ class Manager:
             "cadence_seconds": cadence, "grace_seconds": grace,
             "spec_hash": spec_hash, "witness_uuid": up.get("uuid"),
             "registered": _iso(self._now()),
+            "generation": uuid.uuid4().hex,
             "internal": bool(internal),
         }
         self.systemd.render_units(record)
@@ -182,6 +183,7 @@ class Manager:
             "ts": _iso(self._now()), "event": "register", "job": job_id,
             "schedule": normalized, "cadence_seconds": cadence,
             "grace_seconds": grace, "spec_hash": spec_hash,
+            "generation": record["generation"],
             **({"replaces": existing["spec_hash"]} if existing else {})})
         return {"registered": job_id, "schedule": normalized,
                 "cadence_seconds": cadence, "grace_seconds": grace,
@@ -521,11 +523,11 @@ class Manager:
 
     # -- admin (human-approved) --------------------------------------------
     def deregister(self, job_id: str) -> dict:
-        approvals.consume(self.state, "deregister")
         job = self.state.load_job(job_id)
         if job.get("tombstoned"):
             raise ValueError(f"job '{job_id}' is already tombstoned "
                              f"({job['tombstoned']})")
+        approvals.consume_scoped(self.state, "deregister", job_id)
         fires = [e for e in self.state.read_firings()
                  if e.get("event") == "fire" and e.get("job") == job_id]
         units_removed = bool(self.systemd.remove_units(job_id))

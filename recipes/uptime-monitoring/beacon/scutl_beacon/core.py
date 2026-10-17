@@ -19,11 +19,10 @@ Manifest invariants enforced HERE, in code (recipe.yaml components.beacon):
   - splits are classified, never argued away: local-green/prober-red
     is unreachable (the headline case); prober-green/local-red is
     internal-down; neither vantage overrules the other
-  - retiring a watch retires an obligation: deregistration (and the
-    monitor pause/delete inside it) is approval-gated, prints its
-    blast radius, and tombstones the ledger; a tombstoned target still
-    probed is a zombie breach; a tombstoned target's monitor still
-    standing outlived its tombstone
+  - retiring a watch retires an obligation: deregistration and monitor
+    detach consume approval scoped to one immutable target generation,
+    print the blast radius, and tombstone; a tombstoned target still
+    probed is a zombie breach, and a surviving monitor outlived it
   - foreign evidence is an alarm: a monitor the ledger never
     registered is a custody breach, never adopted
   - beacon watches, never heals: no code path restarts, redeploys, or
@@ -216,6 +215,7 @@ class Manager:
             "local_cadence_seconds": local_cadence_seconds,
             "spec_hash": spec_hash, "monitor_id": up.get("monitor_id"),
             "registered": _iso(self._now()),
+            "generation": pysecrets.token_hex(16),
         }
         self.state.save_target(target_id, record)
         self.state.append_probe({
@@ -223,7 +223,7 @@ class Manager:
             "target": target_id, "url": url,
             "cadence_seconds": cadence_seconds,
             "local_cadence_seconds": local_cadence_seconds,
-            "spec_hash": spec_hash,
+            "spec_hash": spec_hash, "generation": record["generation"],
             **({"replaces": existing["spec_hash"]} if existing else {})})
         return {"registered": target_id, "spec_hash": spec_hash,
                 "monitor_created": bool(up.get("created")),
@@ -568,11 +568,11 @@ class Manager:
 
     # -- admin (human-approved) --------------------------------------------
     def deregister(self, target_id: str) -> dict:
-        approvals.consume(self.state, "deregister")
         target = self.state.load_target(target_id)
         if target.get("tombstoned"):
             raise ValueError(f"target '{target_id}' is already tombstoned "
                              f"({target['tombstoned']})")
+        approvals.consume_scoped(self.state, "deregister", target_id)
         obs = [e for e in self.state.read_probes()
                if e.get("event") == "probe" and e.get("target") == target_id]
         monitor_detached = True
