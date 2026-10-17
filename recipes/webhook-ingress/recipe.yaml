@@ -172,13 +172,14 @@ components:
   wing:
     kind: typed-tool
     source: ./wing/   # component step of the molecule
+    state_dir: "${SCUTL_WING_STATE:-~/.scutl/wing}"
     tools:
       - name: wi_status        # aliveness + walls: last heartbeat round-trip age vs horizon, per-sender last-verified-event age, reject counters vs spike threshold, replay hits, dedup ledger size/age, TLS cert days-left (live probe); escalate flag DERIVED from the breaches list
         command: "wing status"
       - name: wi_sender_add    # register a sender: scheme descriptor + secret, path minted /hook/{sender_id}; owner approval token required — a new sender is new attack surface; refuses past max_senders
-        command: "wing sender add {sender_id} --descriptor {file} --approval {token}"
+        command: "wing sender add {sender_id} --descriptor {file} [--secret-out {secret_file}]"  # approval token is consumed from state (approve helper), not a flag; --secret-out required when the descriptor carries no secret
       - name: wi_sender_rotate # rotate a sender's secret with a dual-key overlap window: old key verifies until the window closes, then refuses; both edges logged. Catalog #28's first concrete instance
-        command: "wing sender rotate {sender_id}"
+        command: "wing sender rotate {sender_id} --secret-out {secret_file}"
       - name: wi_url           # print the handed-out URL for a sender — the string the consumer recipe gives the counterparty (odom gives Porkbun its /hook/porkbun URL); printing is side-effect-free
         command: "wing url {sender_id}"
       - name: wi_events        # read the inbound log: verified events with bodies verbatim, rejects with reason + evidence; filters by sender/time/outcome; append-only, the tool never edits history
@@ -314,7 +315,7 @@ setup:
     expect: "round-trip green with latency; status heartbeat age ~0"
   - step: first-sender
     run: "register the first sender from a captured-bytes descriptor under owner approval; hand out the URL"
-    commands: ["wing sender add {id} --descriptor {file} --approval {token}", "wing url {id}"]
+    commands: ["wing sender add {id} --descriptor {file}", "wing url {id}"]  # approval token is consumed from state (approve helper), not a flag
     expect: "path minted; a test delivery from the sender verifies and appears in wing events"
 
 # ---------------------------------------------------------------------------

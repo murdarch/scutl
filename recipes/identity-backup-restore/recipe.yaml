@@ -158,6 +158,7 @@ components:
   idbackup:
     kind: typed-tool
     source: ./idbackup/          # new; wraps signer/msigner state layouts
+    state_dir: "${SCUTL_IDBACKUP_STATE:-${SCUTL_STATE:-~/.scutl/wallet}}"  # falls back to the wrapped wallet state root
     tools:
       - name: ib_status         # ceremony + backup health: manifest age,
                                 # last verify, last rehearsal, staleness,

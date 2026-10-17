@@ -138,6 +138,7 @@ components:
   sweb:
     kind: typed-tool
     source: ./sweb/   # component step of the molecule
+    state_dir: "${SCUTL_SWEB_STATE:-~/.scutl/sweb}"
     tools:
       - name: sw_status      # subscription, tier+price, bucket, serving leaf, site URL, cert expiry (custom-subzone), last verified publish
         command: "sweb status"

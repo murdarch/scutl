@@ -245,7 +245,7 @@ setup:
   - step: configure
     approval: human
     run: "ratify the walls (allowlist, ceiling, max pods, region pin, volume)"
-    commands: ["gpod admin configure ..."]
+    commands: ["gpod admin configure --gpu-types {gpu_type_allowlist} --max-hourly {max_hourly_usd} --max-pods {max_pods} --region {region_pin}"]
     expect: "JSON echoing walls; exit 4 asks the human for gpod-approve configure"
   - step: first-cycle
     run: "one full create -> active -> destroy -> verified-gone cycle (real cents)"

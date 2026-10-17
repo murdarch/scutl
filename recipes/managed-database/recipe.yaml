@@ -248,13 +248,14 @@ components:
   keep:
     kind: typed-tool
     source: ./keep/   # component step of the molecule
+    state_dir: "${SCUTL_KEEP_STATE:-~/.scutl/keep}"
     tools:
       - name: kp_status        # cluster state+plan, pending_charges vs cap, trusted_ips vs expected, migration ledger head vs cluster's migrations table, last dump age vs dump_interval_days, last rehearsal outcome+age vs horizon, provider latest_backup quoted AS CLAIM, breaches list, escalate DERIVED in code
         command: "keep status"
       - name: kp_provision     # create the cluster (real spend: $15/mo accrues from now): approval token required, refuses if a keep-labeled cluster already exists or max_clusters reached; polls to Running, sets trusted_ips to the workshop's egress addresses BEFORE first use, creates the app user (admin user is never the working identity), records id+host+port in the cluster ledger; credentials land in the custody dir at 0600
-        command: "keep provision --approval {token}"
+        command: "keep provision --trusted-ip {egress_ip} --key-file {key_file}"  # approval token is consumed from state (approve helper), not a flag; --trusted-ip repeatable
       - name: kp_migrate       # apply pending migrations in order: each file checksummed, applied in a transaction, recorded in the cluster's migrations table and the local ledger only after commit; refuses on gap or checksum mismatch of any applied file; destructive DDL (DROP/TRUNCATE) refuses without --approval
-        command: "keep migrate [--approval {token}]"
+        command: "keep migrate [--file {migration_file}]"  # destructive-DDL approval is consumed from state (approve helper), not a flag
       - name: kp_dump          # pg_dump custom-format per keep-owned database, SHA-256 at dump time, silo put (silo's own read-back digest wall applies), dump manifest appended (ledger head, per-table row counts, digest) only after silo confirms
         command: "keep dump"
       - name: kp_rehearse      # the spine: fetch the latest dump from silo, re-hash against the dump manifest, check scratch headroom, pg_restore into a scratch database on the cluster, compare row counts and per-table digests against the manifest, append outcome to the rehearsal ledger, drop the scratch db; red or parked rehearsals are breaches
@@ -262,7 +263,7 @@ components:
       - name: kp_report        # structured session report: everything kp_status shows plus dump/rehearsal ledger tails quoted verbatim; escalate derived from breaches in code
         command: "keep report"
       - name: kp_teardown      # destroy the cluster: prints the blast radius first (databases, row counts, last dump age, last rehearsal outcome), requires approval, takes a FINAL dump to silo and verifies it before DELETE, then verify-gone (GET expects absent) and verify-stopped (pending_charges absent from the account read); tombstones the cluster ledger
-        command: "keep teardown --approval {token}"
+        command: "keep teardown"  # approval token is consumed from state (approve helper), not a flag
     invariants:
       - "The word 'restorable' has exactly one source: the rehearsal
          ledger. kp_report quotes the last rehearsal's outcome, age,
@@ -438,7 +439,7 @@ setup:
     expect: "keep status names both rails; silo put path proven by silo's own canary"
   - step: provision
     run: "create the hobbyist-cc cluster under owner approval (real spend: $15/mo accrues from now until teardown); trusted_ips set before first use; app user created; credentials to custody at 0600"
-    commands: ["keep provision --approval {token}", "keep status"]
+    commands: ["keep provision --trusted-ip {egress_ip} --key-file {key_file}", "keep status"]  # approval token is consumed from state (approve helper), not a flag
     expect: "cluster Running; allowlist matches expected; admin credential in custody, echoed nowhere; caps unratified stated honestly"
   - step: policy-ratified
     run: "owner ratifies monthly_spend_cap_usd, dump_interval_days, rehearsal_interval_days, rehearsal_horizon_factor, scratch_headroom_factor, max_clusters"

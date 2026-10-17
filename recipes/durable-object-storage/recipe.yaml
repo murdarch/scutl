@@ -227,6 +227,7 @@ components:
   silo:
     kind: typed-tool
     source: ./silo/   # component step of the molecule
+    state_dir: "${SCUTL_SILO_STATE:-~/.scutl/silo}"
     tools:
       - name: si_status        # subscription reachable, bytes stored vs storage_cap_gb, projected spend vs monthly_spend_cap_usd, last rehearsal outcome+age vs horizon, manifest-vs-inventory drift, breaches list, escalate DERIVED from breaches in code
         command: "silo status"
@@ -239,11 +240,11 @@ components:
       - name: si_inventory     # list bucket contents and diff against the manifest both ways: manifest entries missing from the bucket (loss) and bucket objects missing from the manifest (drift); either direction is a breach
         command: "silo inventory"
       - name: si_delete        # remove an object: approval token required, refuses without it, logs what+why+who approved; over-cap pressure is never grounds — parking is
-        command: "silo delete {key} --approval {token}"
+        command: "silo delete {key}"  # approval token is consumed from state (written by the approve helper), not passed as a flag
       - name: si_report        # structured session report: bytes/spend vs caps, last rehearsal age+outcome quoted from the rehearsal ledger, inventory drift, breaches list, escalate derived in code
         command: "silo report"
       - name: si_teardown      # destroy the subscription: approval token required, prints what dies first (object count, bytes, last rehearsal), DELETE via the rail API, then verify-gone (endpoint probe expects failure), tombstone in the manifest
-        command: "silo teardown --approval {token}"
+        command: "silo teardown"  # approval token is consumed from state (written by the approve helper), not passed as a flag
     invariants:
       - "A put is not done until the read-back matches: SHA-256 is
          computed over the local bytes BEFORE upload, the object is

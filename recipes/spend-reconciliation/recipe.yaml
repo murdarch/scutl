@@ -169,6 +169,7 @@ components:
   sprecon:
     kind: typed-tool
     source: ./sprecon/         # new; consumes signer/pserv/prov layouts
+    state_dir: "${SPRECON_ROOT:-~/.scutl/sprecon}"  # audited-wallet dir comes from SPRECON_WALLET (required, no default)
     tools:
       - name: sr_status        # audit health: last reconciled block,
                                # per-log checkpoint digests, open finding
@@ -188,7 +189,7 @@ components:
                                # requires a human token for escalated
                                # findings and for any re-baseline; the
                                # note names the evidence that closed it.
-        command: "sprecon resolve --finding {id}"
+        command: "sprecon resolve --finding {id} --note {note}"
     invariants:
       - "The reconciler holds no key material and no provider
          credentials: no signing key, no kek, no API key. Its config

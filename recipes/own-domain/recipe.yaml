@@ -152,6 +152,7 @@ components:
   odom:
     kind: typed-tool
     source: ./odom/   # component step of the molecule
+    state_dir: "${SCUTL_ODOM_STATE:-~/.scutl/odom}"
     tools:
       - name: od_status    # portfolio: per-domain expireDate + days-left vs horizon, autoRenew/securityLock/whoisPrivacy flags, balance vs floor, autoTopup state, spend vs provider limit; escalate flag SET when any wall is breached
         command: "odom status"

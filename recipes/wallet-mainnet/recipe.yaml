@@ -111,7 +111,7 @@ components:
   msigner:
     kind: typed-tool          # typed boundary; no shell access to keys
     source: ./msigner/
-    state_dir: "${SCUTL_STATE:-~/.scutl/mwallet}"  # key (0600), caps.json,
+    state_dir: "${SCUTL_MWALLET_STATE:-~/.scutl/mwallet}"  # key (0600), caps.json,
                                                     # ratchet queue, spend log
                                                     # (append-only), counters,
                                                     # ceremony record, tombstone
@@ -149,7 +149,7 @@ components:
         ops:
           keygen: "msigner admin keygen --cap-per-tx {cap_per_tx} --cap-daily {cap_daily} --cap-lifetime {cap_lifetime}"
           backup-verify: "msigner admin backup-verify"
-          restore-rehearsal: "msigner admin restore-rehearsal"
+          restore-rehearsal: "msigner admin restore-rehearsal --backup-dir {backup_dir}"
           ratchet: "msigner admin ratchet --cap {which} --to {amount}"  # {which} is the literal cap name: cap_per_tx | cap_daily | cap_lifetime (not per-tx/daily/lifetime)
           unpanic: "msigner admin unpanic"
           revoke: "msigner admin revoke"
@@ -243,7 +243,7 @@ setup:
   - step: install-signer
     run: "msigner install into state_dir; verify tools respond"
     commands: ["pip install ./msigner", "msigner status"]
-    expect: "exit 2 (not-setup) before keygen is healthy; any other error is not"
+    expect: "exit 0 with .configured false before keygen is healthy; a nonzero exit here is a real error, not the fresh state"
   - step: keygen
     approval: human
     run: "mw_admin keygen; key written 0600; address reported; caps armed at defaults"
@@ -266,7 +266,7 @@ setup:
       demands the backup copy, verifies the restored key derives the SAME
       address, then swaps back. The wallet has now survived its own loss
       once, while it is still worth nothing.
-    commands: ["msigner admin restore-rehearsal"]
+    commands: ["msigner admin restore-rehearsal --backup-dir {backup_dir}"]
     expect: "JSON with .rehearsal_passed true and .address unchanged; ceremony record complete — spend tools unlock"
   - step: micro-fund
     actor: human
@@ -290,7 +290,7 @@ setup:
       One real x402 payment at micro scale through the live facilitator —
       the first irreversible outbound act, sized so being wrong is cheap.
       Confirm the settle txhash on-chain and the spend log entry.
-    commands: ["x402-buy {probe_url} --payment-id setup-probe-1 --wallet mainnet"]
+    commands: ["SCUTL_STATE=${SCUTL_MWALLET_STATE:-~/.scutl/mwallet} x402-buy {probe_url} --payment-id setup-probe-1"]  # wallet selection is BY STATE DIR — x402-buy has no --wallet flag
     expect: "confirmed txhash; spend log matches; THEN the human sends the real balance (repeating micro-fund's verify at full amount)"
 
 # ---------------------------------------------------------------------------

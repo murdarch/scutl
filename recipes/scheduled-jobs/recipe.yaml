@@ -225,11 +225,12 @@ components:
   bell:
     kind: typed-tool
     source: ./bell/   # component step of the molecule
+    state_dir: "${SCUTL_BELL_STATE:-~/.scutl/bell}"
     tools:
       - name: bl_status        # three-way diff per job (ledgered spec vs unit file on disk vs witness check), slot classification since last verify, unwitnessed streaks vs threshold, verifier age vs its horizon, job count vs max_jobs, witness reachability, breaches list, escalate DERIVED in code
         command: "bell status"
       - name: bl_register      # idempotent end to end: validate the schedule (UTC only; OnCalendar round-tripped through systemd-analyze calendar — parse failure refuses), render timer+service units, upsert the witness check by slug (unique param; grace derived from cadence), append the registration to the schedule ledger; re-registering the same spec converges; refuses past max_jobs; a changed spec is a new ledger line, never an edit
-        command: "bell register {job}"
+        command: "bell register {job} --schedule {oncalendar_utc} --argv {argv_json}"
       - name: bl_fire          # the run harness every unit invokes: mint rid -> witness /start ping -> run argv -> commit ledger entry (exactly-once) -> witness exit-status ping with rid; witness unreachable never fails the job but records unwitnessed; a Persistent= catch-up run records catchup with the slot it repairs
         command: "bell fire {job}"
       - name: bl_verify        # the reconciliation: walk expected slots since last verify from the ledgered schedules; classify each (fired-and-witnessed / fired-unwitnessed / catchup / missed); join witness pings to ledger entries by rid — a witness ping with no ledger entry is a foreign-ping custody alarm; append the verify outcome to its own ledger
@@ -237,7 +238,7 @@ components:
       - name: bl_report        # structured session report: everything bl_status shows plus ledger and verify tails quoted verbatim; witness claims labeled as corroboration; escalate derived from breaches in code
         command: "bell report"
       - name: bl_deregister    # remove an obligation: prints what the job was and when it last fired, requires the approval token, removes the units, pauses-then-deletes the witness check, tombstones the ledger line; a deregistered job's silence is rest, not breach — which is exactly why removal is consented
-        command: "bell deregister {job} --approval {token}"
+        command: "bell deregister {job}"  # approval token is consumed from state (approve helper), not a flag
     invariants:
       - "The word 'ran' has exactly one source: the firing ledger.
          The witness corroborates by rid; a report claiming a job
@@ -405,7 +406,7 @@ setup:
     expect: "bell status shows all five before the first registration is accepted"
   - step: canary-register
     run: "register one canary job (a UTC minutely true) — parse wall, unit render, witness upsert, ledger line, all idempotent: register it twice, converge"
-    commands: ["bell register canary", "bell register canary", "bell status"]
+    commands: ["bell register canary --schedule '*-*-* *:*:00' --argv '[\"true\"]'", "bell register canary --schedule '*-*-* *:*:00' --argv '[\"true\"]'", "bell status"]
     expect: "one job, one check (200 on the second upsert), one registration ledger line; three-way diff clean"
   - step: canary-loop
     run: "let the canary fire, then verify — the full fire/ping/ledger/reconcile loop proves itself end-to-end before any real obligation rides; then register bl_verify itself as a job (the verifier goes on its own bell)"

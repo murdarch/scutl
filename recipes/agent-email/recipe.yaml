@@ -149,6 +149,7 @@ components:
   amail:
     kind: typed-tool
     source: ./amail/   # component step of the molecule
+    state_dir: "${SCUTL_AMAIL_STATE:-~/.scutl/amail}"
     tools:
       - name: am_inbox_status   # inbox identity, allowlist, ceilings, unread/unreplied counts
         command: "amail status"

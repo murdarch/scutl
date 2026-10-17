@@ -243,11 +243,12 @@ components:
   beacon:
     kind: typed-tool
     source: ./beacon/   # component step of the molecule
+    state_dir: "${SCUTL_BEACON_STATE:-~/.scutl/beacon}"
     tools:
       - name: bc_status        # per-target four-way view (ledgered spec vs prober monitor config vs prober evidence freshness vs local probe ledger), classification counts, target count vs max_targets, prober reachability, verifier age vs its horizon, breaches list, escalate DERIVED in code
         command: "beacon status"
       - name: bc_register      # idempotent end to end: validate the target spec (URL, sentinel, cadence, horizons), upsert the prober keyword monitor to match, append the registration to the target ledger; re-registering the same spec converges; refuses past max_targets; a changed spec is a new ledger line, never an edit — and NEVER a silent re-upsert over a drifted monitor (that launders tamper evidence)
-        command: "beacon register {target}"
+        command: "beacon register {target} --url {health_url} --sentinel {sentinel} --cadence-seconds {cadence_seconds} --local-cadence-seconds {local_cadence_seconds}"
       - name: bc_probe         # the local prover, run as a bell tenant: fetch own endpoint from the host, verify sentinel present AND freshness serial within window, append exactly-once to the probe ledger. Local truth only — makes no reachability claim, and its own liveness is bell's slot accounting, not beacon's word
         command: "beacon probe {target}"
       - name: bc_verify        # the reconciliation: batch-read prober monitors (config, state, last-observation timestamp, incidents), cross-read the local probe ledger, classify every target (up-corroborated / down-confirmed / unreachable / internal-down / prober-deaf / unwatched), diff prober config against ledgered spec (mismatch = tamper hard-fail), flag foreign monitors, append the verify outcome to its own ledger
@@ -255,7 +256,7 @@ components:
       - name: bc_report        # structured artifact (#23's services row): current classification first, incidents quoted verbatim, coverage labeled (full / prober-deaf / local-only), uptime %% only beside current state, escalate derived from breaches in code
         command: "beacon report"
       - name: bc_deregister    # retire an obligation to watch: prints the target's watch history and current state, requires the approval token, pauses-then-deletes the prober monitor, tombstones the ledger line; a deregistered target's silence is rest, not breach — which is exactly why removal is consented
-        command: "beacon deregister {target} --approval {token}"
+        command: "beacon deregister {target}"  # approval token is consumed from state (approve helper), not a flag
     invariants:
       - "'Up' has exactly two sources and requires both, fresh:
          prober evidence of the sentinel from outside within the
@@ -447,7 +448,7 @@ setup:
     expect: "beacon status shows all five before the first registration is accepted"
   - step: canary-register
     run: "register one canary target (an owned static page serving a sentinel) — spec wall, prober upsert, ledger line, all idempotent: register it twice, converge"
-    commands: ["beacon register canary", "beacon register canary", "beacon status"]
+    commands: ["beacon register canary --url {canary_health_url} --sentinel {sentinel} --cadence-seconds 300 --local-cadence-seconds 300", "beacon register canary --url {canary_health_url} --sentinel {sentinel} --cadence-seconds 300 --local-cadence-seconds 300", "beacon status"]
     expect: "one target, one monitor (created then matched), one registration ledger line; config diff clean"
   - step: canary-loop
     run: "probe locally, verify, report — the full two-domain loop proves itself before any real service rides; then register bc_probe and bc_verify as bell jobs (the watcher goes on the bell)"
