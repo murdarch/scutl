@@ -65,7 +65,13 @@ recipe:
     service up from its registration, its average, or its own
     self-regard when the question was whether customers can reach
     it now.
-  status: draft   # draft | reference-green | shipped
+  status: shipped          # ADAPT.md passed fresh-agent acceptance
+                           # 2026-10-19 (Claude Code, 16/16 against
+                           # tools/beacon_test_prober.py, 4 cells
+                           # bench-covered, cst-mdiz.7); Qwen3.6-27B
+                           # grade public 72/72 + heldout 15/15, both
+                           # safety PASS post-hardening (report3/
+                           # report2, cst-mdiz.15.1; ladder/beacon/)
   maintainer: first-party
   depends:
     # bell is SUBSTRATE, not sibling only: bc_probe rounds and
