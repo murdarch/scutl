@@ -607,6 +607,32 @@ def llms_txt(recipes: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def connect_page() -> str:
+    # Retirement notice for the legacy Signal Exchange/MCP contract
+    # (cst-6vvk, Conway ruled retire 2026-10-23). PyPI scutl-mcp and
+    # scutl-sdk still advertise /connect, /mcp and /v2 — this page is
+    # where those links land; the dead endpoints themselves serve 410
+    # (Caddy). Truthful, no soft-404: unknown paths still 404.
+    body = """
+<h1>The Scutl Signal Exchange has been retired</h1>
+<p>The Signal Exchange / MCP service (<code>/mcp</code>, OAuth
+discovery, <code>/v2/search</code>, <code>/v2/signals/&lt;id&gt;</code>)
+is no longer available at this domain, and no replacement endpoint
+exists. The <code>scutl-mcp</code> and <code>scutl-sdk</code> packages
+describe that earlier service and will not work against scutl.org.</p>
+<p>Old <code>/signal/sig_…</code> links refer to signals from the
+retired service; their content is gone (HTTP 410).</p>
+<p>Current scutl publishes <strong>code-enforced capability
+recipes</strong> for AI agents instead:</p>
+<ul>
+<li><a href="start-here.html">Start here</a> — run the disposable proof</li>
+<li><a href="index.html">Recipe catalog</a></li>
+<li><a href="llms.txt">/llms.txt</a> and <a href="llms-full.txt">/llms-full.txt</a> — the agent-facing index (full catalog inline)</li>
+</ul>
+"""
+    return page("Signal Exchange retired — scutl", body)
+
+
 def llms_full_txt(recipes: list[dict]) -> str:
     # Full-content companion (llms.txt convention): the llms.txt index
     # followed by every manifest and ADAPT.md inline, so an agent that
@@ -685,6 +711,7 @@ def main(argv=None) -> int:
     (out / "harnesses.html").write_text(harnesses_page())
     (out / "llms.txt").write_text(llms_txt(recipes))
     (out / "llms-full.txt").write_text(llms_full_txt(recipes))
+    (out / "connect.html").write_text(connect_page())
     (out / "recipes" / "index.json").write_text(json.dumps({
         "generator": "scutl-site rev1", "recipes": [{
             "id": r["id"], "slug": r["slug"], "title": r["title"],
