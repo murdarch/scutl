@@ -607,6 +607,23 @@ def llms_txt(recipes: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def llms_full_txt(recipes: list[dict]) -> str:
+    # Full-content companion (llms.txt convention): the llms.txt index
+    # followed by every manifest and ADAPT.md inline, so an agent that
+    # fetched one file has the whole catalog without N round trips.
+    parts = [llms_txt(recipes)]
+    for r in recipes:
+        parts.append(f"\n---\n\n## {r['id']} rev {r['rev']} "
+                     f"[{r['status']}] — {r['title']}\n")
+        parts.append(f"\n### /recipes/{r['slug']}.yaml\n\n```yaml\n"
+                     + (r["dir"] / "recipe.yaml").read_text().rstrip()
+                     + "\n```\n")
+        if r["adapt"]:
+            parts.append(f"\n### /recipes/{r['slug']}/ADAPT.md\n\n"
+                         + r["adapt"].read_text().rstrip() + "\n")
+    return "".join(parts)
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--out", default=str(ROOT / "site" / "out"))
@@ -667,6 +684,7 @@ def main(argv=None) -> int:
     (out / "start-here.html").write_text(start_here_page())
     (out / "harnesses.html").write_text(harnesses_page())
     (out / "llms.txt").write_text(llms_txt(recipes))
+    (out / "llms-full.txt").write_text(llms_full_txt(recipes))
     (out / "recipes" / "index.json").write_text(json.dumps({
         "generator": "scutl-site rev1", "recipes": [{
             "id": r["id"], "slug": r["slug"], "title": r["title"],
