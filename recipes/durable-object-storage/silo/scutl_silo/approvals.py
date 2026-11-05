@@ -19,7 +19,8 @@ from __future__ import annotations
 
 from .state import StateDir
 
-ADMIN_OPS = ("configure", "provision", "delete", "teardown")
+ADMIN_OPS = ("configure", "configure-cold", "provision", "delete",
+             "teardown")
 
 
 class ApprovalRequired(Exception):

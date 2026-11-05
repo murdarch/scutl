@@ -38,6 +38,13 @@ class AuthRefused(Exception):
     subscription that is still billing."""
 
 
+class RestorePending(Exception):
+    """The cold store holds the bytes but cannot hand them over yet —
+    the archive retrieval is still running. NEITHER green nor red
+    (cst-px98.2 design): the rehearsal records it as pending, and only
+    a ratified restore_timeout_hours turns waiting into a breach."""
+
+
 class ObjectStore(Protocol):
     def put(self, key: str, data: bytes) -> None: ...
     def get(self, key: str) -> bytes: ...
@@ -45,6 +52,19 @@ class ObjectStore(Protocol):
     def list(self) -> dict[str, int]: ...          # key -> reported size
     def delete(self, key: str) -> None: ...
     def exists(self, key: str) -> bool: ...
+
+
+class ColdObjectStore(ObjectStore, Protocol):
+    """A second, colder home. get() may raise RestorePending; the two
+    extra calls make the async restore contract explicit. The twin may
+    archive objects, stall restores forever, or lie about restore
+    state — core trusts only re-hashed bytes, as ever."""
+    def cold_status(self, key: str) -> dict: ...
+    # {size, etag, storage_class, restore} — restore is the raw
+    # x-amz-restore header value or "" (advisory, may lie)
+    def request_restore(self, key: str, days: int) -> dict: ...
+    # {http, note} — idempotent-ish: re-requesting an in-flight
+    # restore is recorded, never fatal
 
 
 class Rail(Protocol):

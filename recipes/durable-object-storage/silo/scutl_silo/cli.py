@@ -42,7 +42,9 @@ class _Parser(argparse.ArgumentParser):
 
 def _scrub(text: str, state: StateDir) -> str:
     try:
-        creds = state.load_creds()
+        creds = {**state.load_creds(),
+                 **{f"cold_{k}": v
+                    for k, v in state.load_cold_creds().items()}}
     except Exception:
         creds = {}
     for v in creds.values():
@@ -57,7 +59,10 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("status")
     sub.add_parser("report")
-    sub.add_parser("rehearse")
+    rp = sub.add_parser("rehearse")
+    rp.add_argument("--cold", action="store_true",
+                    help="rehearse the Archive cold target (two-phase: "
+                         "pends what the archive is still retrieving)")
     sub.add_parser("inventory")
 
     pp = sub.add_parser("put")
@@ -86,6 +91,19 @@ def main(argv: list[str] | None = None) -> None:
     cf.add_argument("--deny-glob", action="append", default=[],
                     help="additional deny globs (additive; builtins "
                          "cannot be subtracted)")
+    cc = asub.add_parser("configure-cold")
+    cc.add_argument("--endpoint", required=True)
+    cc.add_argument("--bucket", required=True)
+    cc.add_argument("--restore-timeout-hours", type=int, required=True,
+                    help="ratified wall: a pending restore older than "
+                         "this is a restore-overdue breach")
+    cc.add_argument("--restore-days", type=int, default=2,
+                    help="availability window asked of each restore")
+    cc.add_argument("--creds-file", required=True,
+                    help="0600 file with the COLD subscription's S3 "
+                         "keypair (JSON or two lines)")
+    cc.add_argument("--region", default="us-east-1")
+    cc.add_argument("--subscription-id", default="")
     pv = asub.add_parser("provision")
     pv.add_argument("--cluster-id", type=int, required=True)
     pv.add_argument("--tier-id", type=int, required=True)
@@ -110,7 +128,8 @@ def main(argv: list[str] | None = None) -> None:
         elif args.cmd == "report":
             out = manager.report()
         elif args.cmd == "rehearse":
-            out = manager.rehearse()
+            out = (manager.rehearse_cold() if args.cold
+                   else manager.rehearse())
         elif args.cmd == "inventory":
             out = manager.inventory()
         elif args.cmd == "put":
@@ -133,6 +152,11 @@ def main(argv: list[str] | None = None) -> None:
                 args.rehearsal_interval_days, args.rehearsal_horizon_factor,
                 args.single_put_limit_mb, bucket=args.bucket,
                 region=args.region, deny_globs=args.deny_glob)
+        elif args.cmd == "admin" and args.op == "configure-cold":
+            out = manager.configure_cold(
+                args.endpoint, args.bucket, args.restore_timeout_hours,
+                args.restore_days, args.creds_file, region=args.region,
+                subscription_id=args.subscription_id)
         elif args.cmd == "admin" and args.op == "provision":
             from .s3live import VultrRail
             manager = Manager(state=state, rail=VultrRail(

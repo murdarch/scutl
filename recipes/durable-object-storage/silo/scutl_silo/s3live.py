@@ -24,7 +24,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-from .store import AuthRefused, MissingObject, StoreUnreachable
+from .store import (AuthRefused, MissingObject, RestorePending,
+                    StoreUnreachable)
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
@@ -74,11 +75,26 @@ class S3Store:
         self.region, self.timeout = region, timeout
         self._now = now_fn or (lambda: datetime.now(timezone.utc))
 
+    @staticmethod
+    def _canonical_query(query: str) -> str:
+        """SigV4 canonicalizes every parameter as key=value, '=' included
+        even when the value is empty. A bare sub-resource ('restore',
+        'lifecycle') signed without it is a guaranteed
+        SignatureDoesNotMatch against RGW (live probe, 2026-11-05,
+        cst-px98.2 day-1)."""
+        if not query:
+            return query
+        return "&".join(p if "=" in p else p + "="
+                        for p in query.split("&"))
+
     def _request(self, method: str, key: str = "", query: str = "",
-                 body: bytes = b"") -> tuple[int, dict, bytes]:
+                 body: bytes = b"", extra: dict | None = None
+                 ) -> tuple[int, dict, bytes]:
         path = f"/{self.bucket}" + (f"/{key}" if key else "")
+        query = self._canonical_query(query)
         payload_hash = hashlib.sha256(body).hexdigest() if body else EMPTY_SHA256
-        headers = sign_v4(method, self.endpoint, path, query, {},
+        headers = sign_v4(method, self.endpoint, path, query,
+                          dict(extra or {}),
                           payload_hash, self._access, self._secret,
                           self.region, self._now())
         # Test seam: an endpoint carrying an explicit scheme
@@ -179,6 +195,59 @@ class S3Store:
             return True
         except MissingObject:
             return False
+
+
+class ColdS3Store(S3Store):
+    """The archive-tier bucket. Same wire client, three contract
+    changes (byte-checked on the day-1 probe bucket + Vultr docs,
+    cst-px98.2, 2026-11-05 — the restore classification is re-ratified
+    against day-2 observations before first live use):
+
+      - objects transition to VULTR_ARCHIVE by lifecycle only (every
+        direct archive-class PUT 400s), nightly at 00:00 UTC
+      - a GET during retrieval answers 400 RequestTimeout 'restore is
+        still in progress' — that is PENDING, never unreachable
+      - large objects want an explicit POST ?restore= first
+    """
+
+    def get(self, key: str) -> bytes:
+        status, _, body = self._request("GET", key)
+        if status == 404:
+            raise MissingObject(key)
+        if status == 400 and (b"RequestTimeout" in body
+                              or b"restore" in body.lower()):
+            raise RestorePending(key)
+        if status != 200:
+            raise StoreUnreachable(f"get {key}: HTTP {status}")
+        return body
+
+    def cold_status(self, key: str) -> dict:
+        status, headers, _ = self._request("HEAD", key)
+        if status == 404:
+            raise MissingObject(key)
+        if status != 200:
+            raise StoreUnreachable(f"cold_status {key}: HTTP {status}")
+        folded = {k.lower(): v for k, v in headers.items()}
+        return {"size": int(folded.get("content-length", -1)),
+                "etag": folded.get("etag", "").strip('"'),
+                "storage_class": folded.get("x-amz-storage-class", ""),
+                "restore": folded.get("x-amz-restore", "")}
+
+    def request_restore(self, key: str, days: int) -> dict:
+        xml = (b'<RestoreRequest '
+               b'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+               b"<Days>%d</Days></RestoreRequest>" % days)
+        status, _, body = self._request("POST", key, query="restore",
+                                        body=xml)
+        if status == 404:
+            raise MissingObject(key)
+        if status in (401, 403):     # _request already maps these,
+            raise StoreUnreachable(  # belt for a future refactor
+                f"restore {key}: HTTP {status}")
+        # 200/202 accepted; 409 restore already in flight — both are
+        # the restore being underway, which is all phase A asserts
+        return {"http": status,
+                "note": body[:200].decode("utf-8", "replace")}
 
 
 class VultrRail:

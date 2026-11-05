@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import approvals
+from . import cold as coldmod
 from .state import StateDir
 from .store import MissingObject, ObjectStore, Rail, StoreUnreachable
 
@@ -79,9 +80,11 @@ class WallsUnratified(Exception):
 class Manager:
     def __init__(self, state: StateDir | None = None,
                  store: ObjectStore | None = None,
-                 rail: Rail | None = None, now_fn=None):
+                 rail: Rail | None = None, now_fn=None,
+                 cold_store=None):
         self.state = state or StateDir()
         self._injected_store = store
+        self._injected_cold_store = cold_store
         self._rail = rail
         self._now = now_fn or (lambda: datetime.now(timezone.utc))
 
@@ -99,6 +102,19 @@ class Manager:
                        creds["access"], creds["secret"],
                        region=config.get("region", "us-east-1"),
                        now_fn=self._now)
+
+    def _cold_store(self, cold_cfg: dict):
+        if self._injected_cold_store is not None:
+            return self._injected_cold_store
+        creds = self.state.load_cold_creds()
+        if not creds:
+            raise NotProvisioned(str(self.state.cold_creds_file))
+        from .s3live import ColdS3Store
+        return ColdS3Store(cold_cfg["endpoint"],
+                           cold_cfg.get("bucket", "silo-cold"),
+                           creds["access"], creds["secret"],
+                           region=cold_cfg.get("region", "us-east-1"),
+                           now_fn=self._now)
 
     def _walls(self, config: dict) -> dict:
         missing = [w for w in WALLS if w not in config]
@@ -262,9 +278,45 @@ class Manager:
             "advisory": advisory}
         self.state.append_manifest(record)
         self._ride_manifest(store)
+        cold_note = None
+        if coldmod.cold_config(config):
+            cold_note = self._mirror_cold(config, key, parts)
         return {"stored": key, "sha256": sha, "size": len(data),
                 "chunks": len(parts) if len(parts) > 1 else None,
-                "advisory": advisory, "projection": proj}
+                "advisory": advisory, "projection": proj,
+                "cold": cold_note}
+
+    def _mirror_cold(self, config: dict, key: str,
+                     parts: list[tuple[str, bytes]]) -> dict:
+        """Write the same bytes to the cold home, re-hashed on
+        read-back WHILE STILL HOT (pre-transition objects fetch
+        synchronously — day-1 probe). A cold failure never unwinds
+        the primary put: it lands as a named manifest event and the
+        report surfaces the gap as never-mirrored drift."""
+        try:
+            store = self._cold_store(config["cold"])
+            chunks_cold = []
+            for pkey, pdata in parts:
+                store.put(pkey, pdata)
+                back = store.get(pkey)
+                got = hashlib.sha256(back).hexdigest()
+                want = hashlib.sha256(pdata).hexdigest()
+                if got != want:
+                    raise IntegrityError(
+                        f"cold read-back mismatch on '{pkey}': sent "
+                        f"{want}, got {got}")
+                chunks_cold.append({"key": pkey, "sha256": want,
+                                    "size": len(pdata)})
+        except (IntegrityError, StoreUnreachable, NotProvisioned,
+                MissingObject) as e:
+            self.state.append_manifest({
+                "ts": self._now().isoformat(), "event": "cold-put-failed",
+                "key": key, "why": str(e)[:200]})
+            return {"mirrored": False, "why": str(e)[:200]}
+        self.state.append_manifest({
+            "ts": self._now().isoformat(), "event": "cold-put",
+            "key": key, "chunks_cold": chunks_cold})
+        return {"mirrored": True, "chunks": len(chunks_cold)}
 
     def _ride_manifest(self, store: ObjectStore) -> None:
         """The copy that rides along. Best-effort by design: the local
@@ -358,6 +410,27 @@ class Manager:
         self.state.append_rehearsal(record)
         return record
 
+    def rehearse_cold(self) -> dict:
+        """The two-phase spine over the cold target. Phase A and B are
+        the SAME invocation at different times — each run fetches what
+        it can, pends what the archive is still retrieving, and
+        resolves earlier pendings (cold.py holds the semantics)."""
+        config = self.state.load_config()
+        cold_cfg = coldmod.cold_config(config)
+        if cold_cfg is None:
+            raise NotProvisioned(
+                "no cold target configured — run 'silo admin "
+                "configure-cold' (owner act)")
+        inv = self._inventory()
+        now = self._now()
+        cold_records = [r for r in self.state.read_rehearsals()
+                        if r.get("target") == "cold"]
+        record = coldmod.rehearse_cold(
+            self._cold_store(cold_cfg), self.state.read_manifest(),
+            inv, cold_records, cold_cfg, now)
+        self.state.append_rehearsal(record)
+        return record
+
     # -- inventory: manifest vs bucket, drift both ways ----------------------
     def inventory(self) -> dict:
         config = self.state.load_config()
@@ -392,11 +465,28 @@ class Manager:
         store = self._store(config)
         for skey in self._store_keys(entry):
             store.delete(skey)
+        cold_deleted = None
+        cold_cfg = coldmod.cold_config(config)
+        if cold_cfg:
+            # same consented act covers both homes; a cold home that
+            # cannot be reached keeps its copy and says so loudly
+            try:
+                cstore = self._cold_store(cold_cfg)
+                for skey in self._store_keys(entry):
+                    cstore.delete(skey)
+                cold_deleted = True
+            except (StoreUnreachable, NotProvisioned) as e:
+                cold_deleted = False
+                self.state.append_manifest({
+                    "ts": self._now().isoformat(),
+                    "event": "cold-delete-failed", "key": key,
+                    "why": str(e)[:200]})
         self.state.append_manifest({
             "ts": self._now().isoformat(), "event": "delete", "key": key,
             "size": entry["size"], "approved": True})
         self._ride_manifest(store)
-        return {"deleted": key, "size": entry["size"]}
+        return {"deleted": key, "size": entry["size"],
+                "cold_deleted": cold_deleted}
 
     # -- report: the honest spine --------------------------------------------
     def report(self) -> dict:
@@ -487,6 +577,57 @@ class Manager:
                 f"endpoint unreachable at report time: {str(e)[:200]} — "
                 f"the silo's health is UNKNOWN, which is not green")
 
+        # the cold target, by the same doctrine: pending is a third
+        # state with an age, restore-overdue is a named breach, and a
+        # put that never reached the cold home is drift, not absence
+        cold_cfg = coldmod.cold_config(config)
+        cold_section = None
+        if cold_cfg:
+            cold_records = [r for r in rehearsals
+                            if r.get("target") == "cold"]
+            last_cold = cold_records[-1] if cold_records else None
+            pend = coldmod.pending_since(cold_records)
+            breaches.extend(coldmod.pending_breaches(
+                cold_records, cold_cfg, now))
+            if last_cold is None:
+                if inv:
+                    breaches.append(
+                        "no cold rehearsal has EVER run while objects "
+                        "are stored — the second home is unproven, and "
+                        "'restorable' has one source per target")
+            else:
+                cold_age_days = (now - datetime.fromisoformat(
+                    last_cold["ts"])).total_seconds() / 86400
+                if last_cold["outcome"] == "red":
+                    breaches.append(
+                        f"last cold rehearsal ({last_cold['ts']}) was "
+                        f"RED: mismatches="
+                        f"{last_cold.get('mismatches', [])[:3]} "
+                        f"never_mirrored="
+                        f"{last_cold.get('never_mirrored', [])[:3]}")
+                elif last_cold["outcome"] == "unreachable":
+                    breaches.append(
+                        f"last cold rehearsal ({last_cold['ts']}) could "
+                        f"not reach the cold endpoint: "
+                        f"{last_cold.get('why', '?')} — not a green")
+                if inv and cold_age_days > horizon_days:
+                    breaches.append(
+                        f"cold rehearsal overdue: last ran "
+                        f"{last_cold['ts']} ({cold_age_days:.1f}d ago), "
+                        f"horizon {horizon_days}d")
+            cold_section = {
+                "configured": True,
+                "endpoint": cold_cfg.get("endpoint"),
+                "restore_timeout_hours":
+                    cold_cfg.get("restore_timeout_hours"),
+                "last": last_cold,
+                "pending": [
+                    {"key": k, "since": s, "age_hours": round(
+                        (now - datetime.fromisoformat(s)
+                         ).total_seconds() / 3600, 2)}
+                    for k, s in sorted(pend.items())],
+                "total_runs": len(cold_records)}
+
         # refusals and parks are evidence worth surfacing
         recent_walls = [e for e in self.state.read_manifest()
                         if e.get("event") in ("refused", "parked",
@@ -506,6 +647,7 @@ class Manager:
                           "horizon_days": horizon_days,
                           "total_runs": len(rehearsals)},
             "drift": drift,
+            "cold": cold_section,
             "recent_refusals": recent_walls,
         }
 
@@ -559,6 +701,44 @@ class Manager:
         return {"configured": True,
                 **{w: config[w] for w in WALLS},
                 "deny_globs_extra": config["deny_globs"]}
+
+    def configure_cold(self, endpoint: str, bucket: str,
+                       restore_timeout_hours: int, restore_days: int,
+                       creds_path: str, region: str = "us-east-1",
+                       subscription_id: str = "") -> dict:
+        """Ratify the cold target (owner act, approval-gated). The
+        keypair is copied into the state dir at 0600 and echoed by
+        nothing; the source file stays the owner's to shred."""
+        approvals.consume(self.state, "configure-cold")
+        if int(restore_timeout_hours) < 1 or int(restore_days) < 1:
+            raise ValueError(
+                "restore_timeout_hours and restore_days must be >= 1")
+        raw = Path(creds_path).expanduser().read_text()
+        try:
+            import json as _json
+            creds = _json.loads(raw)
+        except ValueError:
+            lines = raw.split()
+            if len(lines) < 2:
+                raise ValueError(
+                    "creds file must be JSON {access, secret} or two "
+                    "lines: access then secret")
+            creds = {"access": lines[0], "secret": lines[1]}
+        config = self.state.load_config()
+        self.state.init()
+        import json as _json
+        self.state.write_secret(self.state.cold_creds_file,
+                                _json.dumps(creds).encode())
+        config["cold"] = {
+            "endpoint": endpoint, "bucket": bucket, "region": region,
+            "subscription_id": subscription_id,
+            "restore_timeout_hours": int(restore_timeout_hours),
+            "restore_days": int(restore_days)}
+        self.state.save_config(config)
+        return {"cold_configured": True, "endpoint": endpoint,
+                "bucket": bucket,
+                "restore_timeout_hours": int(restore_timeout_hours),
+                "restore_days": int(restore_days)}
 
     def provision(self, cluster_id: int, tier_id: int,
                   label: str = "scutl-silo") -> dict:

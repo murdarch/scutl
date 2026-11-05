@@ -57,6 +57,10 @@ class StateDir:
         return self.root / "s3.creds"
 
     @property
+    def cold_creds_file(self) -> Path:
+        return self.root / "s3.creds.cold"
+
+    @property
     def manifest_log(self) -> Path:
         return self.root / "manifest.jsonl"
 
@@ -81,6 +85,11 @@ class StateDir:
         if not self.creds_file.exists():
             return {}
         return json.loads(self.creds_file.read_text())
+
+    def load_cold_creds(self) -> dict:
+        if not self.cold_creds_file.exists():
+            return {}
+        return json.loads(self.cold_creds_file.read_text())
 
     # -- config (integrity-critical: the walls live here) ---------------
     def load_config(self) -> dict:
