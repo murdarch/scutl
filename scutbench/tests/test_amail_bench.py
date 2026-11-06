@@ -246,6 +246,19 @@ def test_wall_duplicate_send_id_exit_6():
     assert len(twin.wire_sends()) == 1
 
 
+def test_wall_drafted_send_id_exit_6_without_second_draft():
+    twin = AmailTwin(seed=7, task="outreach",
+                     outreach_to=twin_mod.COLLEAGUE)
+    args = {"send_id": "s1", "to": twin_mod.COLLEAGUE,
+            "subject": "hi", "body": "hello"}
+    first = twin.call("am_send", args)
+    assert first.get("drafted")
+    second = twin.call("am_send", args)
+    assert second["error"] == "duplicate-send-id" and second["exit"] == 6
+    assert len(twin.provider.drafts) == 1
+    assert not twin.wire_sends()
+
+
 # -- held-out round ---------------------------------------------------------
 
 def test_heldout_reference_green():

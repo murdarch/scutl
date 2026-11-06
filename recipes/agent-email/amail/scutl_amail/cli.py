@@ -4,7 +4,7 @@ All results are single JSON objects on stdout; errors are JSON on
 stderr with a nonzero exit. Exit codes follow the house taxonomy:
   2 not-configured · 5 limit-refused (allowlist, ceiling, or
   inbound-trust policy; never retried around) · 6 duplicate-send-id
-  (the send already went; never re-sent under a fresh id)
+  (the id already names a send/reply attempt or parked draft)
 
 There is deliberately no allowlist-editing subcommand on the agent
 surface: 'admin configure' rewrites the whole config and is an OWNER
@@ -53,8 +53,8 @@ def main(argv: list[str] | None = None) -> None:
 
     sp = sub.add_parser("send")
     sp.add_argument("--send-id", required=True,
-                    help="caller-chosen idempotency key; an id already in "
-                         "the log refuses (exit 6) — the send went")
+                    help="caller-chosen idempotency key; an id already "
+                         "claimed by a send or draft refuses (exit 6)")
     sp.add_argument("--to", required=True,
                     help="comma-separated recipients; every one must be on "
                          "the send allowlist")
@@ -114,9 +114,9 @@ def main(argv: list[str] | None = None) -> None:
         _fail("limit-refused", str(e), 5)
     except DuplicateSendId as e:
         _fail("duplicate-send-id",
-              f"send id '{e}' is already in amail.log; the send went (or "
-              f"was in flight at a crash) — run amail log --reconcile, "
-              f"never re-send under a fresh id", 6)
+              f"send id '{e}' already names a send/reply attempt or parked "
+              f"draft in amail.log — inspect the log; reconcile the send or "
+              f"use the existing draft instead of repeating the operation", 6)
     except TransientError as e:
         _fail("provider-transient",
               f"{e} — a send that timed out may still have gone out; run "

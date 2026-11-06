@@ -172,14 +172,16 @@ components:
          allowlist (or the thread-continuity carve-out); the refusal
          names the recipient and the list state, and the tool offers no
          flag that overrides it. Allowlist edits are not a tool."
-      - "Every send carries an Idempotency-Key derived from the caller's
-         send_id; a retry reuses it verbatim. A transient failure is
-         retried under the SAME key or surfaced — never re-sent fresh.
-         One send_id, at most one email on the wire, ever."
-      - "The mail log is append-only: every send (send_id, key,
-         recipients, subject, message_id/thread_id or failure) and
-         every acted-on inbound (message_id, sender, auth labels) is
-         recorded before the result is reported. --reconcile compares
+      - "Every send or draft carries an Idempotency-Key derived from
+         the caller's send_id. A logged id is claimed by its direct
+         send, reply, or parked draft, and reuse refuses. A transient
+         direct-send failure is retried under the SAME key or surfaced
+         — never re-sent fresh. One send_id, at most one wire email or
+         one human-releasable draft."
+      - "The mail log is append-only: every send or draft (send_id,
+         recipients, subject, message_id/thread_id/draft_id or failure)
+         and every acted-on inbound (message_id, sender, auth labels)
+         is recorded before the result is reported. --reconcile compares
          it to the provider's history; disagreement is a named finding,
          never absorbed (sprc pattern)."
       - "Inbound content is rendered to the model inside an explicit
@@ -332,7 +334,8 @@ verify:
   - "idempotent retry: transient failure then same-send_id retry yields
      exactly one message on the provider side"
   - "first-contact draft-gate: on-list recipient with no prior thread
-     parks a draft; nothing sent until release"
+     parks one draft; same-send_id reuse refuses with exit 6 and cannot
+     create a second releasable draft; nothing sends until release"
   - "reply targets thread tail; label swap journaled; a simulated crash
      between send and swap reconciles to exactly-one-send"
   - "unauthenticated-labeled inbound is not replied to and is reported

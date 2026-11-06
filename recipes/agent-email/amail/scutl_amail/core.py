@@ -5,10 +5,10 @@ Manifest invariants enforced HERE, in code (recipe.yaml components.amail):
     allowlist (or the thread-continuity carve-out); the refusal names
     the recipient and the list state, and no flag overrides it —
     allowlist edits are not a tool, they are admin configure
-  - every send carries an Idempotency-Key equal to the caller's
-    send_id; a logged send_id is refused (exit 6) so a retry after a
-    crash or timeout cannot deliver twice; one send_id, at most one
-    email on the wire, ever
+  - every send or draft carries an Idempotency-Key equal to the
+    caller's send_id; an id logged for a send/reply intent or parked
+    draft is refused (exit 6), so one send_id names at most one wire
+    message or one human-releasable draft
   - the mail log is append-only and everything derives from it:
     ceiling accounting, duplicate detection, prior-contact state, the
     label-swap journal, and reconciliation against provider history
@@ -240,7 +240,7 @@ class Manager:
         config = self.state.load_config()
         if not send_id.strip():
             raise ValueError("send id must not be empty")
-        if send_id in self.state.sent_ids():
+        if send_id in self.state.claimed_send_ids():
             raise DuplicateSendId(send_id)
         recipients = [r.strip() for r in to.split(",") if r.strip()]
         if not recipients:
@@ -256,9 +256,9 @@ class Manager:
                     f"first contact with {sorted(_addr(a) for a in first_contact)} "
                     f"refused by policy (first_contact=refuse)")
             # draft-gate: park with the provider; nothing sent, nothing
-            # charged against the ceiling. The send_id is NOT consumed —
-            # the human releases the draft, or the owner re-runs after
-            # ratifying contact.
+            # charged against the ceiling. Once recorded, this draft claims
+            # the send_id so retries cannot create multiple releasable drafts.
+            # The human releases or discards the one existing draft.
             draft = self.client.create_draft(
                 send_id, [_addr(r) for r in recipients], subject, body)
             self.state.append_record({
@@ -269,7 +269,8 @@ class Manager:
                     "draft_id": draft.get("draft_id"),
                     "first_contact": sorted(_addr(a) for a in first_contact),
                     "note": "first-contact send parked as a draft for "
-                            "human release (first_contact=draft-gate)"}
+                            "human release; this send id now names that draft "
+                            "(first_contact=draft-gate)"}
 
         self._check_ceiling(config)
         # intent BEFORE the provider call: a crash after this line is an
@@ -297,7 +298,7 @@ class Manager:
         config = self.state.load_config()
         if not send_id.strip():
             raise ValueError("send id must not be empty")
-        if send_id in self.state.sent_ids():
+        if send_id in self.state.claimed_send_ids():
             raise DuplicateSendId(send_id)
         thread = self.client.get_thread(thread_id)
         messages = thread.get("messages", [])

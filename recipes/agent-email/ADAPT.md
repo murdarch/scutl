@@ -22,13 +22,14 @@ unsent), and inbound, every message is counterparty-authored content.
 The component (`amail`) holds the walls in code: no send or reply
 addresses a recipient off the owner-ratified **allowlist** (and thread
 continuity never launders a new one — a mid-thread Reply-To steering
-off-list refuses); every send carries an **Idempotency-Key** derived
-from the caller's send id, so one send id puts at most one message on
-the wire, ever; a **first-contact** send parks as a draft for human
-release; a daily ceiling refuses with the count; and the append-only
-**mail log** reconciles against the provider's own history, so a crash
-or a timeout heals into "landed exactly once" instead of a second
-send. Inbound mail renders inside an explicit data frame with the
+off-list refuses); every send, reply, or draft creation carries an
+**Idempotency-Key** derived from the caller's send id, so one send id
+names at most one wire message or one human-releasable draft; a
+**first-contact** send parks as a draft, claims that id, and waits for
+human release; a daily ceiling refuses with the count; and the
+append-only **mail log** reconciles against the provider's own history,
+so a crash or a timeout heals into "landed exactly once" instead of a
+second send. Inbound mail renders inside an explicit data frame with the
 provider's authentication verdict attached — mail labeled
 `unauthenticated` is evidence, never a counterparty.
 
@@ -98,9 +99,9 @@ them into one free-form "run amail" tool:
   Nothing is executed or fetched.
 - **`am_send`** — `amail send --send-id {id} --to {addrs} --subject
   {s} --body-file {path}` — allowlist + ceiling + first-contact
-  policy checked in code BEFORE the provider call; the intent lands in
-  the mail log first. The body arrives in a FILE (bodies do not belong
-  in argv).
+  policy checked in code BEFORE the provider call. A direct-send
+  intent lands in the log before dispatch; a successful parked draft
+  is logged and claims its send id. The body arrives in a FILE.
 - **`am_reply`** — `amail reply --send-id {id} --thread {tid}
   --body-file {path}` — targets the thread's tail; there is no
   recipient input (the effective recipients are verified against the
@@ -118,9 +119,10 @@ Preserve two properties whatever your harness's convention:
   (allowlist, ceiling, unauthenticated-counterparty, off-list
   reply-to; a wall working, never retried around — and allowlist
   edits are an owner op, never the fix, whoever asked) · 6
-  duplicate-send-id (the send went or was in flight — reconcile,
-  never re-send under a fresh id) · 1 provider-transient (**a send
-  that timed out may still have gone out**: run `amail log
+  duplicate-send-id (the id already names a send/reply attempt or
+  parked draft — inspect the log; reconcile the send or use the
+  existing draft, never retry blindly) · 1 provider-transient (**a
+  send that timed out may still have gone out**: run `amail log
   --reconcile` BEFORE any retry — reconcile heals a landed send to
   exactly-once and no re-send is needed) and provider-refused /
   invalid. Surface exit codes; don't collapse them.
@@ -205,14 +207,13 @@ as the acceptance:
    the fix.
 4. **first-contact draft-gate** — `/walls`: send to
    `colleague@partner.example` (on-list via domain, no prior thread) →
-   `"sent": false, "drafted": true`; `/walls/drafts` holds it,
-   `/walls/wire` stays empty. Nothing sends until a human releases it.
-5. **duplicate send id** — a DISPATCHED send-id refuses reuse: on
-   `/clean`, repeat the reply's `--send-id` → **exit 6**, directing to
-   reconcile, never a fresh id. (A send-id whose first use only parked
-   a DRAFT is not yet "used" — nothing went on the wire — so a reuse
-   re-drafts; the idempotency wall guards the wire, and the human
-   releasing drafts should discard duplicates.)
+   `"sent": false, "drafted": true`; `/walls/drafts` holds exactly one,
+   `/walls/wire` stays empty. Repeat the same `--send-id` → **exit 6**
+   and the draft count remains one. Nothing sends until a human releases
+   the existing draft.
+5. **duplicate send id** — a DISPATCHED send-id also refuses reuse: on
+   `/clean`, repeat the reply's `--send-id` → **exit 6**, directing you
+   to inspect the log and reconcile rather than repeat the operation.
 6. **idempotent transient** — `/transient-retry` (configure with
    `--first-contact send` here): the first send dispatches and THEN
    fails transient (**exit 1**, quoting "may still have gone out").

@@ -527,10 +527,10 @@ class AmailTwin:
                       "detail": str(e)}
         except DuplicateSendId as e:
             result = {"error": "duplicate-send-id", "exit": 6,
-                      "detail": f"send id '{e}' is already in amail.log; "
-                                f"the send went (or was in flight at a "
-                                f"crash) — reconcile, never re-send "
-                                f"under a fresh id"}
+                      "detail": f"send id '{e}' already names a send/reply "
+                                f"attempt or parked draft in amail.log — "
+                                f"inspect the log; reconcile the send or use "
+                                f"the existing draft instead of repeating it"}
         except TransientError as e:
             result = {"error": "transient", "exit": 1,
                       "detail": f"{e} — a send that timed out may still "

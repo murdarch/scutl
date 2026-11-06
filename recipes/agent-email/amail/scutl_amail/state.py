@@ -10,11 +10,11 @@ Layout (state_dir, default ~/.scutl/amail, dir mode 0700):
                   echoed anywhere                                      (0600)
   amail.log       append-only JSONL: every send/reply intent (keyed by
                   the caller's send_id, appended BEFORE the provider
-                  call), every result, every label-swap journal entry,
-                  and every read of an inbound thread. Ceiling
-                  accounting, duplicate detection, prior-contact state,
-                  and reconciliation all derive from it — never from
-                  memory
+                  call), every parked draft, every result, every
+                  label-swap journal entry, and every read of an inbound
+                  thread. Ceiling accounting, send-id claims,
+                  prior-contact state, and reconciliation all derive
+                  from it — never from memory
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ class NoCredential(Exception):
 
 
 class DuplicateSendId(Exception):
-    """This send_id is already in amail.log. Exit 6: the send already
-    went (or was in flight when a crash hit) — dedup working; never
-    re-send under a fresh id."""
+    """This send_id already names a send/reply intent or parked draft
+    in amail.log. Exit 6: inspect the existing operation instead of
+    creating another one."""
 
 
 class StateDir:
@@ -106,6 +106,13 @@ class StateDir:
 
     def sent_ids(self) -> set[str]:
         return {r["send_id"] for r in self.send_intents()}
+
+    def claimed_send_ids(self) -> set[str]:
+        """IDs assigned to a send/reply intent or a parked draft."""
+        return {
+            r["send_id"] for r in self.read_records()
+            if r["kind"] in {"send-intent", "draft"}
+        }
 
     def send_results(self) -> dict[str, dict]:
         """send_id -> latest result record."""

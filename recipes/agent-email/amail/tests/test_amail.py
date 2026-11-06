@@ -144,16 +144,21 @@ def test_daily_ceiling_refuses_with_count(mgr, tmp_path):
     assert "1/1" in str(e.value)
 
 
-def test_first_contact_draft_gate_parks_and_sends_nothing(mgr, tmp_path):
+def test_first_contact_draft_gate_claims_send_id(mgr, tmp_path):
     mgr.configure("agent@box.example", ["owner@home.example"],
                   daily_ceiling=5, first_contact="draft-gate")
-    out = mgr.send("s1", "owner@home.example", "hi", _write_body(tmp_path))
+    body = _write_body(tmp_path)
+    out = mgr.send("s1", "owner@home.example", "hi", body)
     assert out == {"sent": False, "drafted": True, "draft_id": "d1",
                    "first_contact": ["owner@home.example"],
                    "note": out["note"]}
     assert mgr.client.sent == []
-    # nothing charged: the id is not consumed and the ceiling untouched
-    assert "s1" not in mgr.state.sent_ids()
+    assert "s1" not in mgr.state.sent_ids()  # no wire-send ceiling charge
+    assert "s1" in mgr.state.claimed_send_ids()
+    with pytest.raises(DuplicateSendId):
+        mgr.send("s1", "owner@home.example", "hi", body)
+    assert len(mgr.client.drafts) == 1
+    assert mgr.status()["sends_today"] == 0
 
 
 def test_first_contact_refuse_policy(mgr, tmp_path):

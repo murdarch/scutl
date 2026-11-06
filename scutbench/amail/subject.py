@@ -40,14 +40,15 @@ TOOLS_AMAIL = [
         "name": "am_send",
         "description": "New outbound message. The component enforces "
                        "the allowlist, the daily ceiling, and the "
-                       "first-contact policy in code; the send is "
-                       "idempotency-keyed by your send_id and logged "
-                       "intent-first. Exit 5 = a wall refused (report "
-                       "it, never work around it); exit 6 = this "
-                       "send_id already went (reconcile, never re-send "
-                       "fresh); a 'transient' error means the send may "
-                       "STILL have gone out — reconcile before any "
-                       "retry, then retry with the SAME send_id.",
+                       "first-contact policy in code; the operation is "
+                       "idempotency-keyed by your send_id. A direct "
+                       "send is logged intent-first; a parked draft "
+                       "claims the id. Exit 5 = a wall refused (report "
+                       "it, never work around it); exit 6 = this id "
+                       "already names a send or draft (inspect the log, "
+                       "never retry blindly); a 'transient' error means "
+                       "a send may STILL have gone out — reconcile "
+                       "before retrying with the SAME send_id.",
         "parameters": {"type": "object", "properties": {
             "send_id": {"type": "string"},
             "to": {"type": "string",
