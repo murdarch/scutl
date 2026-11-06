@@ -59,9 +59,25 @@ def show(tag, status, headers, body):
 
 
 def main():
-    access, secret = Path(sys.argv[1]).read_text().split()[:2]
+    raw = Path(sys.argv[1]).read_text()
+    try:
+        import json as _json
+        creds = _json.loads(raw)
+        access, secret = creds["access"], creds["secret"]
+    except (ValueError, KeyError, TypeError):
+        access, secret = raw.split()[:2]
     if "--teardown" in sys.argv:
-        for k in ("p1-plain", "p2-explicit-archive", "p2-explicit-standard"):
+        # Enumerate the bucket rather than assume a fixed key set: later
+        # probes (e.g. the day-2 large read-test object) leave keys the
+        # hardcoded list misses, so a blind DELETE bucket hits
+        # BucketNotEmpty (409). List v2, delete every key, then the bucket.
+        st, hd, body = req(access, secret, "GET", query="list-type=2")
+        import re
+        keys = re.findall(rb"<Key>(.*?)</Key>", body)
+        print(f"LIST: HTTP {st}, {len(keys)} object(s): "
+              f"{[k.decode() for k in keys]}")
+        for kb in keys:
+            k = kb.decode()
             show(f"DELETE {k}", *req(access, secret, "DELETE", k))
         show("DELETE bucket", *req(access, secret, "DELETE"))
         return

@@ -123,6 +123,18 @@ decide:
     # replacement. r2/b2/tigris are deferred BY FINDING: each is a
     # new human-owned card-billed account (orphan shape, Conway
     # signup act); revisit only past single-node backup scale.
+    #
+    # rev-2 LIVE finding (cst-px98.2, 2026-11-06, silo-cold @ sjc1):
+    # Vultr's archive tier serves cold reads SYNCHRONOUSLY — a plain
+    # GET of a VULTR_ARCHIVE object (byte-checked to 32 MB) returns 200
+    # with full bytes, no POST ?restore= and no x-amz-restore window;
+    # archive-class DELETE is synchronous too (204). So the put path
+    # needs no restore-latency handling in practice: a cold read is a
+    # hot read. The two-phase PENDING rehearsal and the 400->PENDING
+    # classification remain in code as ARMOR against the provider
+    # switching to Glacier-style async retrieval, never as the expected
+    # path. HEAD reports content-length 0 while archived, so durability
+    # is proven by the rehearsal's digest re-hash, never by size headers.
 
   - id: key-custody
     question: "Which credential owns the backup rail?"

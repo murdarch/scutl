@@ -200,14 +200,25 @@ class S3Store:
 class ColdS3Store(S3Store):
     """The archive-tier bucket. Same wire client, three contract
     changes (byte-checked on the day-1 probe bucket + Vultr docs,
-    cst-px98.2, 2026-11-05 — the restore classification is re-ratified
-    against day-2 observations before first live use):
+    cst-px98.2, 2026-11-05):
 
       - objects transition to VULTR_ARCHIVE by lifecycle only (every
         direct archive-class PUT 400s), nightly at 00:00 UTC
       - a GET during retrieval answers 400 RequestTimeout 'restore is
         still in progress' — that is PENDING, never unreachable
       - large objects want an explicit POST ?restore= first
+
+    Day-2 ratification (cst-px98.2, 2026-11-06, observed on the live
+    silo-cold cluster sjc1): archive-class reads are SYNCHRONOUS on
+    this provider — a plain GET of a VULTR_ARCHIVE object returns 200
+    with full bytes, no POST ?restore= needed and no x-amz-restore
+    window present; archive-class DELETE is synchronous too (204).
+    So on this cluster the 200 path below is the EXPECTED path, and the
+    400->RestorePending branch is kept as ARMOR, not prediction: it is
+    reachable only if the provider changes serving behavior to Glacier-
+    style async retrieval. The two-phase PENDING spine stays for the
+    same reason — insurance against a provider that currently happens
+    to serve cold reads hot. Trust nothing, including pleasant surprises.
     """
 
     def get(self, key: str) -> bytes:
