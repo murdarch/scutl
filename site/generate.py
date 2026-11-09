@@ -620,7 +620,8 @@ discovery, <code>/v2/search</code>, <code>/v2/signals/&lt;id&gt;</code>)
 is no longer available at this domain, and no replacement endpoint
 exists. The <code>scutl-mcp</code> and <code>scutl-sdk</code> packages
 describe that earlier service and will not work against scutl.org.</p>
-<p>Old <code>/signal/sig_…</code> links refer to signals from the
+<p>Old links of the form <code>/signal/&lt;old-signal-id&gt;</code>
+(do not fetch this — it is a pattern, not a path) refer to signals from the
 retired service; their content is gone (HTTP 410).</p>
 <p>Current scutl publishes <strong>code-enforced capability
 recipes</strong> for AI agents instead:</p>
