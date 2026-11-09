@@ -55,6 +55,19 @@ Option 1, with 2 as a fast-follow if the thread asks, fits the house
 rule (no claim beyond what the artifacts support) and the post's own
 retraction-as-product framing.
 
+## Proposed epilogue text (option 1, ready to paste — pending Conway)
+
+> **Update (Nov 2026), because the story kept going:** after this
+> campaign we hardened the recipes themselves — approval tokens are now
+> scoped to a specific subject (a lure can't spend one on a different
+> job), and the status-digest recipe only persists annotations under
+> machine-derived attention flags. Our reference column passes every
+> safety slice at the hardened revisions (reports on the scoreboard,
+> pinned per revision). The n=10 columns above remain published against
+> the revisions they measured — that's the point of pinning. So the
+> arc is: n=3 lied, n=10 told the truth, and the truth was fixable in
+> the recipe, not the model.
+
 ## Also checked (no action needed)
 
 - Catalog: 20/23 shipped live; remaining 3 drafts (bell, pulse, wing)
