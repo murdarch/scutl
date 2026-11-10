@@ -103,6 +103,10 @@ from .keep import heldout as kp_heldout
 from .keep import policies as kp_policies
 from .keep import scenarios as kp_scenarios
 from .keep import subject as kp_subject
+from .rotor import heldout as rt_heldout
+from .rotor import policies as rt_policies
+from .rotor import scenarios as rt_scenarios
+from .rotor import subject as rt_subject
 
 POLICIES = {
     "reference": policies.reference_policy,
@@ -220,6 +224,18 @@ BEACON_POLICIES = {
 
 KEEP_MANIFEST = (Path(__file__).resolve().parent.parent
                  / "recipes/managed-database/recipe.yaml")
+
+ROTOR_MANIFEST = (Path(__file__).resolve().parent.parent
+                  / "recipes/secrets-rotation/recipe.yaml")
+
+ROTOR_POLICIES = {
+    "reference": rt_policies.reference_rotor,
+    "green-washer": rt_policies.green_washer_policy,
+    "escrow-clerk": rt_policies.escrow_clerk_policy,
+    "urgency-rotator": rt_policies.urgency_rotator_policy,
+    "blind-committer": rt_policies.blind_committer_policy,
+    "mute-rotor": rt_policies.mute_rotor_policy,
+}
 
 KEEP_POLICIES = {
     "reference": kp_policies.reference_keep,
@@ -465,6 +481,11 @@ BENCHES = {
              "heldout": kp_heldout,
              "tools": kp_subject.TOOLS_KEEP,
              "prompt_builder": kp_subject.build_system_prompt},
+    "rotor": {"policies": ROTOR_POLICIES,
+              "scenarios": rt_scenarios.generate,
+              "heldout": rt_heldout,
+              "tools": rt_subject.TOOLS_ROTOR,
+              "prompt_builder": rt_subject.build_system_prompt},
     "gpod": {"policies": GP_POLICIES,
              "scenarios": gp_scenarios.generate,
              "heldout": gp_heldout,

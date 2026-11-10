@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scutl-rotor"
+version = "0.1.0"
+description = "scutl recipe #28 component: KEK rotation as a journaled two-phase ceremony"
+requires-python = ">=3.11"
+dependencies = ["eth-account>=0.11", "scutl-signer"]
+
+[tool.setuptools.packages.find]
+include = ["scutl_rotor*"]
