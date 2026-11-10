@@ -315,3 +315,79 @@ def test_cross_model_succession_from_digest_alone(estate):
     heir = Baton(estate["state"], actor="qwen-successor")
     assert heir.stage(digest)["verdicts"] == {"MATCH": 3}
     assert heir.commit()["holder"] == "qwen-successor"
+
+
+# -- CLI (the console surface recipe.yaml promises) -----------------------
+
+def _cli(estate, *argv, actor="agent"):
+    import io
+    from contextlib import redirect_stdout
+    from scutl_baton.cli import main
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        code = main(["--state", str(estate["state"]),
+                     "--actor", actor, *argv])
+    return code, json.loads(buf.getvalue())
+
+
+def test_cli_full_succession_and_exit_taxonomy(estate):
+    code, out = _cli(estate, "status")
+    assert code == 0 and out["lease_holder"] is None
+    code, out = _cli(estate, "pack", actor="elder")
+    assert code == 0 and out["packed"]
+    digest = out["manifest_sha256"]
+    code, out = _cli(estate, "stage")           # missing digest arg
+    assert code == 1 and out["error"] == "invalid"
+    code, out = _cli(estate, "stage", "0" * 64)  # wrong digest
+    assert code == 5 and out["error"] == "digest-mismatch"
+    code, out = _cli(estate, "commit", actor="heir")  # no release, no token
+    # stage first so commit reaches the authority check
+    _cli(estate, "stage", digest, actor="heir")
+    code, out = _cli(estate, "commit", actor="heir")
+    assert code == 4 and out["error"] == "authority-required"
+    code, out = _cli(estate, "release", actor="elder")
+    assert code == 0 and out["manifest_sha256"] == digest
+    code, out = _cli(estate, "commit", actor="heir")
+    assert code == 0 and out["committed"] and out["authority"] == "release"
+    code, out = _cli(estate, "release", actor="stranger")
+    assert code == 2 and out["error"] == "foreign-lease"
+    code, out = _cli(estate, "recover")
+    assert code == 0 and out["recovered"] is False
+
+
+def test_cli_unreachable_block_and_override_token(estate):
+    _cli(estate, "pack", actor="elder")
+    digest = json.loads(
+        (estate["state"] / "manifest.json").read_bytes()) and \
+        hashlib.sha256(
+            (estate["state"] / "manifest.json").read_bytes()).hexdigest()
+    _cli(estate, "release", actor="elder")
+    estate["svc"].unlink()                      # probe surface gone:
+    estate["svc"].mkdir()                       # a dir where a file was
+                                                # makes the read itself fail
+    code, out = _cli(estate, "stage", digest, actor="heir")
+    assert code == 0 and out["unreachable"] == ["income-service"]
+    code, out = _cli(estate, "commit", actor="heir")
+    assert code == 6 and out["error"] == "unreachable-blocked"
+    code, out = _cli(estate, "override", "income-service", "host rebuilt",
+                     actor="heir")
+    assert code == 4                            # no owner token yet
+    from scutl_baton.cli import approve_main
+    import io
+    from contextlib import redirect_stdout
+    with redirect_stdout(io.StringIO()):
+        approve_main(["--state", str(estate["state"]), "override"])
+    code, out = _cli(estate, "override", "income-service", "host rebuilt",
+                     actor="heir")
+    assert code == 0
+    code, out = _cli(estate, "commit", actor="heir")
+    assert code == 0 and out["committed"]
+
+
+def test_cli_secret_refusal_exit_3(estate):
+    blob = json.loads((estate["state"] / ESTATE_NAME).read_text())
+    blob["entries"][0]["invariant"] = "hunter2-kek-passphrase"
+    (estate["state"] / ESTATE_NAME).write_text(json.dumps(blob))
+    code, out = _cli(estate, "pack", actor="elder")
+    assert code == 3 and out["error"] == "secret-refused"
+    assert "hunter2-kek-passphrase" not in out["detail"]

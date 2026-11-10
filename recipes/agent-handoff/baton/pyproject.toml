@@ -10,3 +10,7 @@ requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
 include = ["scutl_baton*"]
+
+[project.scripts]
+baton = "scutl_baton.cli:main"
+baton-approve = "scutl_baton.cli:approve_main"
