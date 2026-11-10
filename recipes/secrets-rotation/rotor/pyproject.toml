@@ -11,3 +11,7 @@ dependencies = ["eth-account>=0.11", "scutl-signer"]
 
 [tool.setuptools.packages.find]
 include = ["scutl_rotor*"]
+
+[project.scripts]
+rotor = "scutl_rotor.cli:main"
+rotor-approve = "scutl_rotor.cli:approve_main"
