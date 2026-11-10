@@ -404,7 +404,7 @@ outcome; the split is stated per-recipe, not hidden.
     reference-green public + heldout. Ladder complete 2026-11-10
     (cst-txf8): qwen36-27b reference rung green (42/42 public, 12/12
     heldout), CLI shipped, ADAPT.md passed fresh-agent acceptance —
-    rev-1 status flip to shipped awaits the maintainer.*
+    Shipped rev 1, 2026-11-10 (Conway).*
 29. **agent-handoff** — package running state (services, wallets,
     obligations) so a successor session or different model can take
     over and *verify* what it inherited before acting.
@@ -419,8 +419,8 @@ outcome; the split is stated per-recipe, not hidden.
     complete 2026-11-10 (cst-fu8y): qwen36-27b reference rung green
     (48/48 public, 12/12 heldout post audit-prompt lowering fix —
     the same recover-first carve-out rotor needed), CLI shipped,
-    ADAPT.md passed fresh-agent acceptance unaided — rev-1 status
-    flip to shipped awaits the maintainer.*
+    ADAPT.md passed fresh-agent acceptance unaided.
+    Shipped rev 1, 2026-11-10 (Conway).*
 30. **decommission-everything** — the full unwind, rehearsed: cancel
     subscriptions, drain wallets to the human, destroy instances,
     tombstone identities, produce a final reconciled statement. Every

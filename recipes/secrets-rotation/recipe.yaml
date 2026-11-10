@@ -1,4 +1,4 @@
-# SCUTL recipe manifest — rev 1 draft
+# SCUTL recipe manifest — rev 1
 # Recipe #28 (catalog, Operations on the agent itself): "secrets-rotation"
 # Design record: bead cst-u3xz (idea filed 2026-08-20, built 2026-11-09).
 # Prior art PROMOTED rather than invented: the keystore/KEK split is
@@ -33,7 +33,7 @@ recipe:
     report; digests stand in for secrets everywhere. An unapproved
     rotation refuses in code; a crash mid-rotation lands in a state the
     journal can name and recover() can finish.
-  status: draft
+  status: shipped
   maintainer: first-party
   depends:
     - { recipe: wallet, rev: 2, role: identity-owner }

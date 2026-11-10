@@ -1,4 +1,4 @@
-# SCUTL recipe manifest — rev 1 draft
+# SCUTL recipe manifest — rev 1
 # Recipe #29 (catalog, Operations on the agent itself): "agent-handoff"
 # Design record: bead cst-fu8y (recon docs/agent-handoff-recon.md,
 # 2026-11-09). Prior art PROMOTED rather than invented: the
@@ -35,7 +35,7 @@ recipe:
     acts before probing, repairs a deliberate state, or takes a
     contested estate is failing this recipe even when its action
     happens to be right.
-  status: draft
+  status: shipped
   maintainer: first-party
   depends:
     - { recipe: idbr, rev: 1, role: backup-prover, optional: true }
