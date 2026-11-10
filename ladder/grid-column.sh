@@ -47,6 +47,7 @@ manifest_for() {  # bench dir name == recipe id in its manifest
 }
 
 FAILED=()
+FILED=()
 # REPORT_N: optional numeric suffix (re-emission runs; scoreboard's
 # collect() takes the highest N per model — cst-d5rs).
 N="${REPORT_N:-}"
@@ -90,8 +91,11 @@ for bench in "${BENCHES[@]}"; do
   # BEFORE the abort check — a filed report deserves its provenance
   # even when it is the one that trips the abort (bell 2026-09-06).
   [ -n "$ENVJ" ] && cp -f "$ENVJ" "$REPO/ladder/$bench/$TAG-env.json"
-  kills=$(cat "$REPO"/ladder/*/"$TAG"-public-report$N.json 2>/dev/null \
-          | grep -c "think budget")
+  # Count kills only in reports THIS run filed (cst-fu8y session,
+  # 2026-11-10): the old estate-wide glob counted September kills in
+  # other benches' reports and aborted a fresh, kill-free column.
+  FILED+=("$out")
+  kills=$(cat "${FILED[@]}" 2>/dev/null | grep -c "think budget")
   nseeds=$(awk -F, '{print NF}' <<<"$SEEDS")
   if [ "$kills" -ge "$nseeds" ] && [ "$kills" -ge 3 ]; then
     echo "== EARLY ABORT: $kills think-budget kills accumulated in column $TAG (rule: >= seed count $nseeds, min 3) — remaining benches skipped =="
