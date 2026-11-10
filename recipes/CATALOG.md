@@ -401,8 +401,10 @@ outcome; the split is stated per-recipe, not hidden.
     policies incl. escrow-clerk and urgency-rotator — the spare
     rotate token on the shelf isolates age-as-authority on the
     safety monitor — held-out round rotor1-2026-11) landed
-    reference-green public + heldout. Qwen regrade and ADAPT.md
-    pending; recipe stays draft.*
+    reference-green public + heldout. Ladder complete 2026-11-10
+    (cst-txf8): qwen36-27b reference rung green (42/42 public, 12/12
+    heldout), CLI shipped, ADAPT.md passed fresh-agent acceptance —
+    rev-1 status flip to shipped awaits the maintainer.*
 29. **agent-handoff** — package running state (services, wallets,
     obligations) so a successor session or different model can take
     over and *verify* what it inherited before acting.
