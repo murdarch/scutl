@@ -76,8 +76,13 @@ before an identity exists —
 
 — with `"configured": true`, the owner address, and
 `kek_sha256`/`kek_age_days` when pointed (via `SCUTL_ROTOR_STATE` or
-`--state`) at an existing wallet state dir. A traceback or a nonzero
-exit is not healthy — stop and report it.
+`--state`) at an existing wallet state dir. Note the default state
+resolution (`$SCUTL_ROTOR_STATE`, `$SCUTL_STATE`, then
+`~/.scutl/wallet`): on a host that already runs a wallet, a bare
+`rotor status` answers for the LIVE identity — read-only and safe,
+but expect the configured-true form there, not the fresh-install
+one. A traceback or a nonzero exit is not healthy — stop and report
+it.
 
 ## Step 2 — Expose the tools
 

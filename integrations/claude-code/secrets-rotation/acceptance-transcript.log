@@ -1,0 +1,88 @@
+{
+  "configured": true,
+  "in_flight": null,
+  "inbox": [],
+  "journal_tail": [],
+  "kek_age_days": 0,
+  "kek_sha256": "333891a419a843ba500fbab516b5037481a29ce87e8537ac46ea5b61c1401a59",
+  "overdue": false,
+  "owner_address": "0xbA0E9DDb4a997DEe41035D4b001f4F3C15912F74",
+  "panicked": false,
+  "rotation_horizon_days": 180,
+  "rotations_committed": 0,
+  "tombstoned": false
+}
+{
+  "detail": "op 'rotate' requires human approval: create the token with 'rotor-approve rotate' (out of band), then retry",
+  "error": "approval-required",
+  "exit": 4
+}
+{
+  "granted": "rotate",
+  "note": "consumed by the next 'rotor begin' \u2014 one token, one ceremony",
+  "token": "/tmp/claude-1003/-home-star-seats-star/23f8a98a-dfe8-4b4d-83bd-47b04d2f17dc/scratchpad/sweep/id/approvals/rotate.token"
+}
+{
+  "new_kek_sha256": "e7eea374d16190e21fcd944aac79308a16d4117342d6a267d13bd5b23e4a6cdd",
+  "next": "rt_commit re-hashes the staged bytes against this journal entry and swaps atomically",
+  "old_kek_sha256": "333891a419a843ba500fbab516b5037481a29ce87e8537ac46ea5b61c1401a59",
+  "owner_address": "0xbA0E9DDb4a997DEe41035D4b001f4F3C15912F74",
+  "phase": "verified",
+  "rotation_id": "rot-20261110T120745-196a7990"
+}
+{
+  "committed": true,
+  "new_kek_sha256": "e7eea374d16190e21fcd944aac79308a16d4117342d6a267d13bd5b23e4a6cdd",
+  "old_kek_destroyed": true,
+  "old_kek_sha256": "333891a419a843ba500fbab516b5037481a29ce87e8537ac46ea5b61c1401a59",
+  "owner_address": "0xbA0E9DDb4a997DEe41035D4b001f4F3C15912F74",
+  "rotation_id": "rot-20261110T120745-196a7990"
+}
+{
+  "configured": true,
+  "in_flight": null,
+  "inbox": [],
+  "journal_tail": [
+    {
+      "at": "2026-11-10T12:07:45.896717+00:00",
+      "event": "begin",
+      "keystore_sha256_before": "0e94ac3de4878339158719f9890e45f578703331b38c1873e3bfdd1311beace4",
+      "old_kek_sha256": "333891a419a843ba500fbab516b5037481a29ce87e8537ac46ea5b61c1401a59",
+      "owner_address": "0xbA0E9DDb4a997DEe41035D4b001f4F3C15912F74",
+      "rotation_id": "rot-20261110T120745-196a7990"
+    },
+    {
+      "at": "2026-11-10T12:07:46.272962+00:00",
+      "event": "staged",
+      "rotation_id": "rot-20261110T120745-196a7990",
+      "staged_kek_sha256": "e7eea374d16190e21fcd944aac79308a16d4117342d6a267d13bd5b23e4a6cdd",
+      "staged_keystore_sha256": "181b070b0f31a54993ea615c0b279118bf4a26cce076c04dd63d3f260e173d6d"
+    },
+    {
+      "at": "2026-11-10T12:07:46.628500+00:00",
+      "event": "verified",
+      "rotation_id": "rot-20261110T120745-196a7990"
+    },
+    {
+      "at": "2026-11-10T12:07:46.673337+00:00",
+      "event": "commit-started",
+      "rotation_id": "rot-20261110T120745-196a7990"
+    },
+    {
+      "at": "2026-11-10T12:07:46.674712+00:00",
+      "event": "committed",
+      "new_kek_sha256": "e7eea374d16190e21fcd944aac79308a16d4117342d6a267d13bd5b23e4a6cdd",
+      "old_kek_destroyed": true,
+      "old_kek_sha256": "333891a419a843ba500fbab516b5037481a29ce87e8537ac46ea5b61c1401a59",
+      "rotation_id": "rot-20261110T120745-196a7990"
+    }
+  ],
+  "kek_age_days": 0,
+  "kek_sha256": "e7eea374d16190e21fcd944aac79308a16d4117342d6a267d13bd5b23e4a6cdd",
+  "overdue": false,
+  "owner_address": "0xbA0E9DDb4a997DEe41035D4b001f4F3C15912F74",
+  "panicked": false,
+  "rotation_horizon_days": 180,
+  "rotations_committed": 1,
+  "tombstoned": false
+}
