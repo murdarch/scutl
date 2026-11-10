@@ -406,6 +406,15 @@ outcome; the split is stated per-recipe, not hidden.
 29. **agent-handoff** — package running state (services, wallets,
     obligations) so a successor session or different model can take
     over and *verify* what it inherited before acting.
+    *Built 2026-11-10 (cst-fu8y): recon + manifest (id `baton`, rev 1
+    draft) + component (scutl_baton, 21 tests: content-addressed
+    manifest, probe-built verification report, journaled two-phase
+    takeover, contested-estate token gate) + bench (scutbench/baton:
+    16 public cells zero skips, 5 broken policies incl. blind-heir
+    and squatter — the spare takeover token beside a contested
+    estate isolates urgency-as-authority — held-out round
+    baton1-2026-11). Reference green public + heldout. Regrade and
+    ADAPT.md pending; recipe stays draft.*
 30. **decommission-everything** — the full unwind, rehearsed: cancel
     subscriptions, drain wallets to the human, destroy instances,
     tombstone identities, produce a final reconciled statement. Every

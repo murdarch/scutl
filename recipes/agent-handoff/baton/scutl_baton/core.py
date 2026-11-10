@@ -130,11 +130,14 @@ class Baton:
     """One estate, one state dir, one journal."""
 
     def __init__(self, state_dir: str | Path, actor: str = "agent",
-                 crash_point: str | None = None):
+                 crash_point: str | None = None,
+                 clock=None, fault_hook=None):
         self.dir = Path(state_dir).expanduser()
         self.dir.mkdir(parents=True, exist_ok=True)
         self.actor = actor
         self._crash_point = crash_point
+        self._clock = clock                 # () -> aware datetime
+        self._fault_hook = fault_hook       # (point) -> None | raise
         self.journal_path = self.dir / JOURNAL_NAME
         self.manifest_path = self.dir / MANIFEST_NAME
         self.report_path = self.dir / REPORT_NAME
@@ -142,11 +145,23 @@ class Baton:
 
     # -- plumbing ------------------------------------------------------
     def _maybe_crash(self, point: str):
+        if self._fault_hook is not None:
+            self._fault_hook(point)
         if self._crash_point == point:
             raise SimulatedCrash(point)
 
+    def _now(self) -> str:
+        if self._clock is not None:
+            return self._clock().isoformat(timespec="seconds")
+        return _now()
+
+    def _epoch(self) -> float:
+        if self._clock is not None:
+            return self._clock().timestamp()
+        return time.time()
+
     def _journal(self, event: str, **fields):
-        entry = {"at": _now(), "event": event, **fields}
+        entry = {"at": self._now(), "event": event, **fields}
         with open(self.journal_path, "a") as f:
             f.write(json.dumps(entry, sort_keys=True) + "\n")
 
@@ -226,7 +241,7 @@ class Baton:
             "inbox": inbox,
         }
         if manifest:
-            age_h = (time.time() - manifest["packed_epoch"]) / 3600
+            age_h = (self._epoch() - manifest["packed_epoch"]) / 3600
             out["manifest_sha256"] = _sha256_file(self.manifest_path)
             out["manifest_age_hours"] = round(age_h, 1)
         if report:
@@ -247,8 +262,8 @@ class Baton:
                              "signed is a claim nobody owns")
         records = [self._baseline_entry(e) for e in estate["entries"]]
         manifest = {
-            "packed_at": _now(),
-            "packed_epoch": time.time(),
+            "packed_at": self._now(),
+            "packed_epoch": self._epoch(),
             "packed_by": self.actor,
             "freshness_hours": estate.get("freshness_hours", 72),
             "entries": records,
@@ -303,7 +318,7 @@ class Baton:
                 f"digest {expected_manifest_sha256} — the package is "
                 f"not what was handed over")
         manifest = json.loads(blob)
-        age_h = (time.time() - manifest["packed_epoch"]) / 3600
+        age_h = (self._epoch() - manifest["packed_epoch"]) / 3600
         stale = age_h > manifest["freshness_hours"]
         results = []
         for rec in manifest["entries"]:
@@ -326,7 +341,7 @@ class Baton:
             results.append(row)
         self._maybe_crash("mid-stage")
         report = {
-            "staged_at": _now(),
+            "staged_at": self._now(),
             "staged_by": self.actor,
             "manifest_sha256": actual,
             "manifest_stale": stale,
@@ -347,7 +362,10 @@ class Baton:
                 "drift": [r["id"] for r in results
                           if r["verdict"] == "DRIFT"],
                 "unreachable": [r["id"] for r in results
-                                if r["verdict"] == "UNREACHABLE"]}
+                                if r["verdict"] == "UNREACHABLE"],
+                "deliberate": [
+                    {"id": r["id"], **r["deliberate"]}
+                    for r in results if r.get("deliberate")]}
 
     # -- overrides (out-of-band, journaled) ---------------------------------
     def override(self, entry_id: str, reason: str) -> dict:
@@ -411,7 +429,7 @@ class Baton:
                       by=self.actor)
         self._maybe_crash("mid-commit")
         self.lease_path.write_text(json.dumps(
-            {"holder": self.actor, "since": _now(),
+            {"holder": self.actor, "since": self._now(),
              "manifest_sha256": mdigest}, sort_keys=True))
         self._journal("committed", manifest_sha256=mdigest,
                       holder=self.actor, authority=authority)
@@ -446,7 +464,7 @@ class Baton:
                   == last["manifest_sha256"])
             if ok:
                 self.lease_path.write_text(json.dumps(
-                    {"holder": last["by"], "since": _now(),
+                    {"holder": last["by"], "since": self._now(),
                      "manifest_sha256": last["manifest_sha256"]},
                     sort_keys=True))
                 self._journal("committed",

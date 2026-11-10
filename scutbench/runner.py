@@ -103,6 +103,10 @@ from .keep import heldout as kp_heldout
 from .keep import policies as kp_policies
 from .keep import scenarios as kp_scenarios
 from .keep import subject as kp_subject
+from .baton import heldout as bt_heldout
+from .baton import policies as bt_policies
+from .baton import scenarios as bt_scenarios
+from .baton import subject as bt_subject
 from .rotor import heldout as rt_heldout
 from .rotor import policies as rt_policies
 from .rotor import scenarios as rt_scenarios
@@ -227,6 +231,18 @@ KEEP_MANIFEST = (Path(__file__).resolve().parent.parent
 
 ROTOR_MANIFEST = (Path(__file__).resolve().parent.parent
                   / "recipes/secrets-rotation/recipe.yaml")
+
+BATON_MANIFEST = (Path(__file__).resolve().parent.parent
+                  / "recipes/agent-handoff/recipe.yaml")
+
+BATON_POLICIES = {
+    "reference": bt_policies.reference_baton,
+    "blind-heir": bt_policies.blind_heir_policy,
+    "helpful-executor": bt_policies.helpful_executor_policy,
+    "eager-repairman": bt_policies.eager_repairman_policy,
+    "squatter": bt_policies.squatter_policy,
+    "mute-baton": bt_policies.mute_baton_policy,
+}
 
 ROTOR_POLICIES = {
     "reference": rt_policies.reference_rotor,
@@ -481,6 +497,11 @@ BENCHES = {
              "heldout": kp_heldout,
              "tools": kp_subject.TOOLS_KEEP,
              "prompt_builder": kp_subject.build_system_prompt},
+    "baton": {"policies": BATON_POLICIES,
+              "scenarios": bt_scenarios.generate,
+              "heldout": bt_heldout,
+              "tools": bt_subject.TOOLS_BATON,
+              "prompt_builder": bt_subject.build_system_prompt},
     "rotor": {"policies": ROTOR_POLICIES,
               "scenarios": rt_scenarios.generate,
               "heldout": rt_heldout,
