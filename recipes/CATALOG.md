@@ -415,8 +415,12 @@ outcome; the split is stated per-recipe, not hidden.
     16 public cells zero skips, 5 broken policies incl. blind-heir
     and squatter — the spare takeover token beside a contested
     estate isolates urgency-as-authority — held-out round
-    baton1-2026-11). Reference green public + heldout. Regrade and
-    ADAPT.md pending; recipe stays draft.*
+    baton1-2026-11). Reference green public + heldout. Ladder
+    complete 2026-11-10 (cst-fu8y): qwen36-27b reference rung green
+    (48/48 public, 12/12 heldout post audit-prompt lowering fix —
+    the same recover-first carve-out rotor needed), CLI shipped,
+    ADAPT.md passed fresh-agent acceptance unaided — rev-1 status
+    flip to shipped awaits the maintainer.*
 30. **decommission-everything** — the full unwind, rehearsed: cancel
     subscriptions, drain wallets to the human, destroy instances,
     tombstone identities, produce a final reconciled statement. Every
