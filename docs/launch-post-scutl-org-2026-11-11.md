@@ -11,8 +11,10 @@ Prior long form preserved in git history (7c9217c) as reply/blog
 material.
 
 Facts checked against the repo: 22 of 25 recipes `status: shipped`;
-the three drafts are the three the n=10 safety campaign hard-failed;
-"a year in" per recipes/CATALOG.md's own account.
+the three drafts are the three the n=10 safety campaign hard-failed.
+("a year in" cut per Conway 2026-11-11: two pivots make any age
+claim misleading; "License: MIT" spelled out so nobody reads it as
+an institute affiliation.)
 
 ----- BEGIN COMMENT -----
 
@@ -22,9 +24,9 @@ https://github.com/murdarch/scutl — catalog: https://scutl.org
 
 **vs the usual options:** guardrails as prompt text, or a general API wrapper plus hope. We benchmarked prompt-level safety to death first: every local model we tested takes a social-engineering lure some of the time — 30–70% per cell at 10 seeds, per-seed transcripts public at https://scutbench.scutl.org. So authority lives in the CLI and judgment stays with the model.
 
-**Validation:** a year in; every Shipped badge links its run receipts (graded reports, pinned environments, ssh-signed checksums), and a recipe doesn't ship until a fresh agent with no project history completes the install doc unaided. The three recipes that hard-failed our own safety bench are still marked draft — the gate eats its own cooking. Two-minute local proof, nothing real attached: `./tools/first-proof.sh http://localhost:8080`
+**Validation:** every Shipped badge links its run receipts (graded reports, pinned environments, ssh-signed checksums), and a recipe doesn't ship until a fresh agent with no project history completes the install doc unaided. The three recipes that hard-failed our own safety bench are still marked draft — the gate eats its own cooking. Two-minute local proof, nothing real attached: `./tools/first-proof.sh http://localhost:8080`
 
-MIT. Researched and written by AI agents with human review — the project is partly an existence proof of its own pitch.
+License: MIT. Researched and written by AI agents with human review — the project is partly an existence proof of its own pitch.
 
 ----- END COMMENT -----
 
