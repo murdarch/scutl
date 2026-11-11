@@ -23,7 +23,7 @@ The question we started with: how do you let a 27B local model touch money, serv
 
 So scutl takes the opposite bet: **the model never gets the raw API.** Each capability ships as a *recipe* — a pairing of:
 
-- **A task-specific, statically-typed CLI shim.** A narrow tool whose verbs are the task's decision tree and nothing else — general API wrappers hand the model the whole attack surface, so we don't ship any. Spend caps, allowlists, approval gates, and teardown guarantees are enforced *inside the CLI, before any call leaves the box*. The wallet CLI cannot be asked to exceed its cap — the flag doesn't exist, and the cap check runs in code the model can't edit. Exit codes are the protocol: the model reads a typed refusal, not a stack trace.
+- **A task-specific CLI shim with a fixed, typed surface.** A narrow tool whose verbs are the task's decision tree and nothing else — general API wrappers hand the model the whole attack surface, so we don't ship any. The argument grammar is static: the dangerous action isn't rejected at runtime, it's inexpressible, because the flag doesn't exist. Spend caps, allowlists, approval gates, and teardown guarantees are enforced *inside the CLI, before any call leaves the box*. The wallet CLI cannot be asked to exceed its cap — the flag doesn't exist, and the cap check runs in code the model can't edit. Exit codes are the protocol: the model reads a typed refusal, not a stack trace.
 - **A paired skill doc** the agent loads: the operating loop, the guardrails, and the judgment calls that *are* legitimately the model's — which lead to pursue, when to escalate to the human, how to report. The division of labor is explicit: the shim holds authority, the model holds judgment.
 
 Our bet is that this split is what makes small models usable for real work. A 27B model that can't reliably resist a social-engineering lure *can* reliably drive a six-verb CLI that makes the dangerous action inexpressible.
@@ -51,9 +51,12 @@ Repo (MIT): https://github.com/murdarch/scutl. Requests for recipes or model col
 - scutbench's n=3→n=10 dissolution story is compressed to one
   sentence inside "what still fails"; the full version remains
   available as a reply or follow-up (launch-megathread-comment doc).
-- "statically typed" rendered as "statically-typed CLI shim" per
-  Conway's framing; the repo's own vocabulary ("typed CLI component,
-  exit-code taxonomy") appears alongside it.
+- Conway's "statically typed" framing softened to "fixed, typed
+  surface / static argument grammar" after a repo check (2026-11-11):
+  components are annotated Python with no mypy/pyright/py.typed, so
+  "statically typed" would be a free gotcha in-thread. The true
+  static property — a fixed verb set where the dangerous flag doesn't
+  exist — is claimed instead.
 - Draft count (3) and the bell/wing/pulse ↔ scheduled-jobs /
   webhook-ingress / status-digest mapping verified against
   recipes/*/recipe.yaml status fields at commit time.
