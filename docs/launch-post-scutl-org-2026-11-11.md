@@ -4,9 +4,10 @@ Status: DRAFT for Conway. Supersedes the scutbench-first megathread
 comment (launch-megathread-comment-2026-11-11.md) as the lead
 announce. Story: how to trust small models → task-specific typed CLI
 shim + paired skill doc; scutbench mentioned in passing as the
-evidence for what still fails. Voice per the murdarch.com style guide
-(precise, dry, evidence-first, lightly strange; every claim points at
-a public artifact), relaxed a notch for Reddit. Formatted as a
+evidence for what still fails. Voice per the public-voice house
+guide (brain/doc/public-voice.md, cst-grn7: verdict first, judgment
+tagged, outsider pass, de-AI lint, honest-AI disclosure), relaxed a
+notch for Reddit per Conway. Formatted as a
 megathread comment (bold lead, no title field, Reddit markdown); works
 as a standalone post by promoting the lead to the title.
 
@@ -22,10 +23,10 @@ The question we started with: how do you let a 27B local model touch money, serv
 
 So scutl takes the opposite bet: **the model never gets the raw API.** Each capability ships as a *recipe* — a pairing of:
 
-- **A task-specific, statically-typed CLI shim.** Not a general API wrapper: a narrow tool whose verbs are the task's decision tree and nothing else. Spend caps, allowlists, approval gates, and teardown guarantees are enforced *inside the CLI, before any call leaves the box*. The wallet CLI cannot be asked to exceed its cap — the flag doesn't exist, and the cap check runs in code the model can't edit. Exit codes are the protocol: the model reads a typed refusal, not a stack trace.
+- **A task-specific, statically-typed CLI shim.** A narrow tool whose verbs are the task's decision tree and nothing else — general API wrappers hand the model the whole attack surface, so we don't ship any. Spend caps, allowlists, approval gates, and teardown guarantees are enforced *inside the CLI, before any call leaves the box*. The wallet CLI cannot be asked to exceed its cap — the flag doesn't exist, and the cap check runs in code the model can't edit. Exit codes are the protocol: the model reads a typed refusal, not a stack trace.
 - **A paired skill doc** the agent loads: the operating loop, the guardrails, and the judgment calls that *are* legitimately the model's — which lead to pursue, when to escalate to the human, how to report. The division of labor is explicit: the shim holds authority, the model holds judgment.
 
-The claim is that this split is what makes small models usable for real work. A 27B model that can't reliably resist a social-engineering lure *can* reliably drive a six-verb CLI that makes the dangerous action inexpressible.
+Our bet is that this split is what makes small models usable for real work. A 27B model that can't reliably resist a social-engineering lure *can* reliably drive a six-verb CLI that makes the dangerous action inexpressible.
 
 **What's shipped (22 of 25):** testnet and mainnet USDC wallets (caps ratcheted by a human, panic is the one ungated op), buying x402-priced APIs, *selling* a service for x402 payments, VPS provisioning and GPU rental with spend ceilings and no orphaned billing, email, own-domain, static website, durable object storage, managed database, identity backup/restore, secrets rotation, uptime monitoring, spend reconciliation, subscription steward, refund clerk, inbox triage, and more. Catalog with every manifest rendered verbatim, checksummed and ssh-signed: https://scutl.org
 
@@ -40,6 +41,8 @@ Try it against your own local server in ~2 minutes, nothing real attached, no ac
     ./tools/first-proof.sh http://localhost:8080   # your OpenAI-compatible server
 
 Repo (MIT): https://github.com/murdarch/scutl. Requests for recipes or model columns welcome — a benchmark column is one script invocation.
+
+*scutl's recipes, benchmarks, and this post were researched and written by AI agents, with human review; the project is partly an existence proof of its own pitch. Corrections welcome in-thread.*
 
 ----- END COMMENT -----
 
