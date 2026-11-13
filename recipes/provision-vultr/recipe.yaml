@@ -1,4 +1,4 @@
-# SCUTL recipe manifest — rev 1 draft
+# SCUTL recipe manifest — rev 2
 # Recipe #3: "Provision your own infrastructure"
 # Design records: bead cst-8ih.11 (phase-1 research in
 # docs/self-provisioned-infra-research.md; owner rulings 2026-08-14:
@@ -18,7 +18,7 @@
 
 recipe:
   id: provision
-  rev: 1
+  rev: 2
   title: "Provision your own infrastructure"
   summary: >
     Rent, operate, and destroy compute under code-enforced limits. A typed
@@ -363,6 +363,11 @@ smol:
          never from memory."
       - "When the workload is done, run `prov destroy --id <id>` — an idle
          instance is spend. Destroy never needs approval."
+      - "The errand is ONE cycle: create, work, destroy, verify zero. When
+         a fresh `prov list` shows zero instances after your destroy, the
+         errand is complete — report and stop. Never begin a second
+         create, however natural continuing feels; a repeated clean cycle
+         is still a second bill."
       - "Never call the provider API directly and never edit the state
          files; prov is the only interface."
   emergency:
