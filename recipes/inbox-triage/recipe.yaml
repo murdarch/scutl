@@ -102,7 +102,7 @@ components:
                                         # decommission marker,
                                         # approvals/
     tools:
-      - name: sift_status       # config, counts, last run, log tail summary
+      - name: sift_status       # config/credential/decommission state and counts
         command: "sift status"
       - name: sift_fetch        # list unseen messages, capped in code
         command: "sift fetch"

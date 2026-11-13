@@ -1,0 +1,14 @@
+{
+  "generator": "recipes/inbox-triage/hermes/refresh_context.py",
+  "recipe": "triage",
+  "rev": 1,
+  "profile": "smol",
+  "configuration": {
+    "mailbox": "mock-mailbox"
+  },
+  "parameters": {
+    "categories": "action-needed,waiting-on-reply,newsletter,receipt,suspicious",
+    "max_fetch_per_run": "25"
+  },
+  "manifest_sha256": "c46dd9f77731b8bfc8d773053dc685e9228ca7200c7388bbabbcaddbf6f76627"
+}

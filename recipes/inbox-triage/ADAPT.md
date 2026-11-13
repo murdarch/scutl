@@ -50,10 +50,15 @@ directory (repo: `recipes/inbox-triage/sift/`). Install it into a venv
 and probe it:
 
 ```bash
-python3 -m venv ~/.scutl/sift-venv                 # or any venv you manage
+python3 -m venv ~/.scutl/sift-venv                 # canonical Hermes adapter path
 ~/.scutl/sift-venv/bin/pip install ./sift          # from this recipe directory
 ~/.scutl/sift-venv/bin/sift status
 ```
+
+The maintained Hermes adapter resolves this executable under the runtime's
+HOME. Install the component there; the tool arguments cannot select another
+executable. Other harnesses may manage a different venv and use its absolute
+`sift` path.
 
 `sift status` is never gated (recipe invariant): unconfigured it
 answers exit 0 with `{"configured": false, ...}` — which is healthy
@@ -75,12 +80,23 @@ path** if your harness runs tools under a restricted PATH.
 
 ## Step 2 — Expose the tools
 
-Map each entry in `components.sift.tools` (recipe.yaml) into your
-harness's tool format. Expose them as **distinct** tools; do not merge
-them into one free-form "run sift" tool:
+For **Hermes**, install the maintained native adapter in
+[`hermes/`](hermes/README.md). It ships the six tools below and the
+namespaced skill `sift-native:inbox-triage`; do not generate replacement
+Python handlers or a second skill. Follow its deterministic install
+procedure, then continue with the human setup and scoped acceptance here.
+Bring-up measures installing/configuring a shipped artifact, not generating
+integration code. Installing the files is not proof that acceptance passed.
 
-- **`sift_status`** — `sift status` — config, counts, last run, log
-  tail summary. Never gated.
+The boundaries belong to the Sift component. They do not sandbox other
+Hermes tools or the whole agent.
+
+For other harnesses, map each entry in `components.sift.tools`
+(recipe.yaml) into the harness's tool format. Expose them as **distinct**
+tools; do not merge them into one free-form "run sift" tool:
+
+- **`sift_status`** — `sift status` — configuration, credential and
+  decommission state, and counts. No last-run or log-tail API. Never gated.
 - **`sift_fetch`** — `sift fetch` — list unseen messages, capped in
   code (`max_fetch_per_run`); the batch and the remaining count are
   the answer.
@@ -99,8 +115,14 @@ them into one free-form "run sift" tool:
   tiers, put admin behind the human-confirmation tier; if it cannot,
   carry the guardrail text and say so.
 
-Preserve two properties whatever your harness's convention:
+Preserve these properties whatever your harness's convention:
 
+- **Arguments are literal data.** The manifest's command strings describe
+  fixed operations and flags, not shell programs to interpolate. Bind
+  placeholders as native arguments or individual argv values, never by
+  constructing a shell command. Use `--flag=value` so a bare flag-like
+  value such as `--leading-dash` remains data. Preserve dollars, quotes
+  and newlines exactly; do not sanitize or re-quote the supplied text.
 - **Exit-code taxonomy is the protocol.** 2 not-configured (run setup
   first) · 3 decommissioned (fetch/triage/draft refuse; status still
   answers) · 4 approval-required (ask the human for
@@ -123,7 +145,13 @@ inventing a wrapper.
 
 ## Step 3 — Carry the guardrails into system context
 
-Copy `execute.guardrails` and the `execute.loop` description from
+For Hermes, load the shipped `sift-native:inbox-triage` skill. Its context
+is generated from this recipe and registered by the plugin; do not copy it
+into a global skill or ask the model to rebuild it. See
+[`hermes/README.md`](hermes/README.md) for loading and regeneration.
+
+For other harnesses, copy `execute.guardrails` and the `execute.loop`
+description from
 recipe.yaml **verbatim** into the system prompt / skill text of the
 agent that will triage. The manifest's `smol:` block is the distilled
 version for small-model harnesses — carry its `state_rule`,

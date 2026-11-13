@@ -1,0 +1,11 @@
+name: sift-native
+version: 0.1.0
+description: Canonical inbox-triage tools backed by the real local Sift CLI
+python_runtime: external
+provides_tools:
+  - sift_status
+  - sift_fetch
+  - sift_read
+  - sift_triage
+  - sift_draft
+  - sift_admin
