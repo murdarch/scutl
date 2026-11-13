@@ -11,9 +11,17 @@ blessed by this recipe revision.
 
 ## Install from the source checkout
 
-Run these commands as the operator, from the scutl repository root. The real
-Hermes CLI must already be installed and on `PATH`. Choose the intended profile
-explicitly; the installer never guesses a sticky-active Hermes profile.
+The recipe-root quick start is [`../INSTALL.md`](../INSTALL.md):
+
+```sh
+HERMES_HOME=/absolute/path/to/intended/profile python3 install_hermes.py
+```
+
+Run that command from `recipes/inbox-triage/`; the root entry delegates to
+this directory's maintained `install.py`, with identical refusal and native
+enable behavior. The detailed commands below run from the **scutl repository
+root**. Hermes must already be installed and on `PATH`. Choose the intended
+profile explicitly; the installer never guesses a sticky-active profile.
 
 1. If Sift is not already installed at its fixed location, install the canonical
    component using the recipe's component-install procedure. Its executable

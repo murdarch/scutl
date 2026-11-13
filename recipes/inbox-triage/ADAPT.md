@@ -80,11 +80,17 @@ path** if your harness runs tools under a restricted PATH.
 
 ## Step 2 — Expose the tools
 
-For **Hermes**, install the maintained native adapter in
-[`hermes/`](hermes/README.md). It ships the six tools below and the
-namespaced skill `sift-native:inbox-triage`; do not generate replacement
-Python handlers or a second skill. Follow its deterministic install
-procedure, then continue with the human setup and scoped acceptance here.
+For **Hermes**, start with [`INSTALL.md`](INSTALL.md). From this recipe
+directory, with Hermes already on PATH, the single install command is:
+
+```sh
+HERMES_HOME=/absolute/path/to/intended/profile python3 install_hermes.py
+```
+
+It installs the maintained native adapter in [`hermes/`](hermes/README.md):
+the six tools below and namespaced skill `sift-native:inbox-triage`.
+Do not generate replacement Python handlers or a second skill. Continue with
+the human setup and scoped acceptance here after the native enable succeeds.
 Bring-up measures installing/configuring a shipped artifact, not generating
 integration code. Installing the files is not proof that acceptance passed.
 
