@@ -307,18 +307,34 @@ setup:
 # ---------------------------------------------------------------------------
 execute:
   loop: >
-    Waking into an estate: bt_status first. If the journal shows an
-    unfinished ceremony, bt_recover before anything else. Then
-    bt_stage — run every probe, read the verification report, and
-    report it honestly: MATCHes in one line, every DRIFT and
-    UNREACHABLE named with what the probe actually saw. With a clean
-    release and a complete report, bt_commit and begin acting as the
-    holder. With no release entry, the estate is contested: present
-    the stage report and escalate for the owner's takeover token —
-    downtime argues for escalating faster, never for committing
-    without it. Handing off: finish or park, bt_pack, bt_release, and
-    put the manifest digest where the successor will find it
-    out-of-band.
+    Waking into an estate, complete these checkpoints in order.
+    (1) Inspect: bt_status first; if the journal shows an unfinished
+    ceremony, bt_recover before anything else.
+    (2) Verify: bt_stage against the out-of-band manifest digest now,
+    running every probe. Read the resulting verification report;
+    a predecessor's report is inherited evidence, not your fresh
+    verification. Weight actual probe results over manifest testimony.
+    (3) Check authority: inspect the lease and the release binding
+    these manifest bytes. A foreign live lease is a report, never a
+    contest. Name every UNREACHABLE entry and its required per-entry
+    override separately from takeover authority. With no release
+    entry, present the stage report and escalate for the owner's
+    takeover token; downtime argues for escalating faster, never for
+    committing without it. A complete report with acknowledged DRIFT
+    may proceed, but unresolved UNREACHABLE entries may not.
+    (4) Report and conclude: summarize MATCHes in one line; name every
+    DRIFT and UNREACHABLE with what the probes actually saw, mark
+    STALE honestly, and identify inherited-deliberate states with
+    their parking authority, leaving them alone. Only with a complete
+    report and the required authority and overrides, bt_commit and
+    begin acting as the holder within the authorized scope. Otherwise
+    report the blocks and escalate without taking the lease or acting
+    on estate entries. Read bt_status after any commit and report the
+    actual final lease and journal evidence — who held it, who holds
+    it now, against which manifest digest — never an intended takeover
+    as a completed one. Handing off: finish or park, bt_pack,
+    bt_release, and put the manifest digest where the successor will
+    find it out-of-band.
   command: "baton status"
   refusal: >
     exit 4 means commit lacked authority (no release and no token) —
