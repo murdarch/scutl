@@ -7,9 +7,7 @@ approval helper or a real mailbox account.
 
 import importlib.util
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
@@ -141,26 +139,15 @@ def native(tmp_path, monkeypatch, mailbox):
         state.credential_file.chmod(0o600)
         return out
 
-    def direct(*args):
-        completed = subprocess.run(
-            [str(executable), *args], capture_output=True,
-            encoding="utf-8", env=os.environ.copy(), timeout=10,
-        )
-        return {"exit_code": completed.returncode,
-                "stdout": completed.stdout, "stderr": completed.stderr}
 
     return SimpleNamespace(adapter=adapter, state=state, mailbox=mailbox,
-                           configure=configure, direct=direct)
+                           configure=configure)
 
 
-def refusal(native, handler, args, cli_args, code, kind):
-    # Refusals do not mutate the operation's state, so the direct invocation
-    # provides the component's exact streams without pinning its prose here.
-    expected = native.direct(*cli_args)
-    assert expected["exit_code"] == code, expected
+def refusal(handler, args, code, kind):
     result = json.loads(handler(args))
     assert type(result["exit_code"]) is int
-    assert result == expected
+    assert result["exit_code"] == code, result
     assert result["stdout"] == ""
     assert json.loads(result["stderr"])["error"] == kind
     return result
@@ -171,35 +158,36 @@ def test_status_and_not_configured_refusal_without_setup(native):
     assert out["configured"] is False
     assert out["cred_present"] is False
     assert out["triaged"] == 0
-    refusal(native, native.adapter.handle_fetch, {}, ("fetch",),
-            2, "not-configured")
+    refusal(native.adapter.handle_fetch, {}, 2, "not-configured")
     assert native.mailbox.calls == []
 
 
-@pytest.mark.parametrize("message_id,category,summary", [
-    ("--leading-dash", "--leading-dash", "--leading-dash"),
-    ("-x", "-x", "-x"),
-    ("--leading-dash", 'cash$"quote\'\nline',
-     'Cost $5; $(printf ignored) \'single\' "double"\nnext café'),
+@pytest.mark.parametrize("message_id,category", [
+    ("--leading-dash", "--leading-dash"),
+    ("-x", "-x"),
+    ("--leading-dash", 'cash$"quote\'\nline'),
 ])
-def test_literal_verdict_values_returned_and_durable(
-        native, message_id, category, summary):
+def test_literal_source_values_are_durable(native, message_id, category):
     native.configure(category)
-    fetched = success(native.adapter.handle_fetch)
-    assert fetched["fetched"] == 2
-    assert fetched["remaining"] == 1
-    assert message_id in {message["id"] for message in fetched["messages"]}
+    success(native.adapter.handle_fetch)
     read = success(native.adapter.handle_read, {"message_id": message_id})
     assert read["id"] == message_id
     assert read["untrusted_content"]["body"] == MAIL_BODY
-
+    assert read["untrusted_content"]["passages"] == [
+        {"index": index, "text": text}
+        for index, text in enumerate(MAIL_BODY.splitlines(keepends=True))
+    ]
     out = success(native.adapter.handle_triage, {
-        "message_id": message_id, "category": category, "summary": summary,
+        "message_id": message_id, "category": category,
+        "source_ref": read["source_ref"], "passages": [0, 1],
+        "missing_context": ["calendar", "sent-history", "answer-context"],
     })
     assert out["triaged"] is True
-    assert (out["id"], out["category"], out["summary"]) == (
-        message_id, category, summary,
-    )
+    assert (out["id"], out["category"]) == (message_id, category)
+    assert out["source_ref"] == read["source_ref"]
+    assert out["source_version"] == read["source_version"]
+    for line in MAIL_BODY.splitlines(keepends=True):
+        assert line in out["summary"]
     assert native.state.read_verdicts() == [
         {key: value for key, value in out.items() if key != "triaged"}
     ]
@@ -209,18 +197,17 @@ def test_literal_verdict_values_returned_and_durable(
 def test_duplicate_verdict_keeps_log_byte_for_byte(native):
     native.configure()
     success(native.adapter.handle_fetch)
-    success(native.adapter.handle_triage, {
+    read = success(native.adapter.handle_read, {"message_id": "--leading-dash"})
+    args = {
         "message_id": "--leading-dash", "category": "suspicious",
-        "summary": "--leading-dash",
-    })
+        "source_ref": read["source_ref"], "passages": [0], "missing_context": [],
+    }
+    success(native.adapter.handle_triage, args)
     before = native.state.triage_log.read_bytes()
     calls_before = list(native.mailbox.calls)
-    refusal(native, native.adapter.handle_triage, {
-        "message_id": "--leading-dash", "category": "other",
-        "summary": 'replacement $HOME\n"not appended"',
-    }, ("triage", "--id=--leading-dash", "--category=other",
-        '--summary=replacement $HOME\n"not appended"'),
-        6, "already-triaged")
+    refusal(native.adapter.handle_triage, {
+        **args, "category": "other", "passages": [1],
+    }, 6, "already-triaged")
     assert native.state.triage_log.read_bytes() == before
     assert len(native.state.read_verdicts()) == 1
     assert native.mailbox.calls == calls_before
@@ -231,12 +218,9 @@ def test_admin_approval_refusal_preserves_component_error(native, op):
     native.configure()
     before = native.state.config_file.read_bytes()
     args = {"op": op}
-    cli_args = ("admin", op)
     if op == "configure":
         args.update(categories="--leading-dash", max_fetch_per_run=1)
-        cli_args += ("--categories=--leading-dash", "--max-fetch=1")
-    refusal(native, native.adapter.handle_admin, args, cli_args,
-            4, "approval-required")
+    refusal(native.adapter.handle_admin, args, 4, "approval-required")
     assert native.state.config_file.read_bytes() == before
     assert not native.state.decommission_marker.exists()
     assert not list(native.state.approvals.iterdir())
@@ -247,8 +231,7 @@ def test_cap_refusal_is_not_a_provider_read(native):
     native.configure(cap=2)
     success(native.adapter.handle_fetch)
     calls_before = list(native.mailbox.calls)
-    refusal(native, native.adapter.handle_read, {"message_id": "m-3"},
-            ("read", "--id=m-3"), 5, "limit-refused")
+    refusal(native.adapter.handle_read, {"message_id": "m-3"}, 5, "limit-refused")
     assert native.mailbox.calls == calls_before
     assert not native.state.triage_log.exists()
 
@@ -259,8 +242,7 @@ def test_decommission_refusal_and_ungated_status(native):
     approvals.grant(native.state, "decommission")
     success(native.adapter.handle_admin, {"op": "decommission"})
     calls_before = list(native.mailbox.calls)
-    refusal(native, native.adapter.handle_fetch, {}, ("fetch",),
-            3, "decommissioned")
+    refusal(native.adapter.handle_fetch, {}, 3, "decommissioned")
     native.state.credential_file.unlink()
     out = success(native.adapter.handle_status)
     assert out["decommissioned"] is True
@@ -273,9 +255,8 @@ def test_provider_refusal_preserves_real_stderr(native):
     native.mailbox.failure = (503, {
         "detail": '--provider "$HOME"\nrefused café',
     })
-    refusal(native, native.adapter.handle_fetch, {}, ("fetch",),
-            1, "mailbox-transient")
-    assert native.mailbox.calls == ["/messages", "/messages"]
+    refusal(native.adapter.handle_fetch, {}, 1, "mailbox-transient")
+    assert native.mailbox.calls == ["/messages"]
     assert not native.state.triage_log.exists()
 
 
@@ -308,9 +289,78 @@ def test_draft_reads_literal_path_and_body_for_fixed_sender(
 
     before = Path(out["path"]).read_bytes()
     source.write_text("replacement must not overwrite", encoding="utf-8")
-    refusal(native, native.adapter.handle_draft, {
+    refusal(native.adapter.handle_draft, {
         "message_id": message_id, "path": body_path,
-    }, ("draft", f"--reply-to={message_id}", f"--body-file={body_path}"),
-        1, "invalid")
+    }, 1, "invalid")
     assert Path(out["path"]).read_bytes() == before
     assert success(native.adapter.handle_status)["drafts"] == 1
+
+
+@pytest.mark.parametrize("change", [
+    {"summary": "no legacy summary"},
+    {"source_ref": 1},
+    {"passages": "0"},
+    {"passages": [True]},
+    {"passages": [-1]},
+    {"passages": [0.0]},
+    {"passages": [0, 0]},
+    {"passages": [0, 1, 2, 3, 4]},
+    {"passages": [[]]},
+    {"missing_context": "calendar"},
+    {"missing_context": ["invented answer"]},
+    {"missing_context": [False]},
+    {"identity": "caller-supplied"},
+])
+def test_triage_strict_arguments_do_not_append(native, change):
+    native.configure()
+    args = {
+        "message_id": "--leading-dash", "category": "other",
+        "source_ref": "not-a-receipt", "passages": [], "missing_context": [],
+    }
+    result = json.loads(native.adapter.handle_triage({**args, **change}))
+    assert result["error"] == "adapter-error"
+    assert result["exit_code"] == 1
+    assert result["stdout"] == result["stderr"] == ""
+    assert not native.state.triage_log.exists()
+    assert native.mailbox.calls == []
+
+
+@pytest.mark.parametrize("key", [
+    "message_id", "category", "source_ref", "passages", "missing_context",
+])
+def test_triage_requires_every_argument(native, key):
+    args = {
+        "message_id": "x", "category": "other", "source_ref": "unknown",
+        "passages": [], "missing_context": [],
+    }
+    del args[key]
+    result = json.loads(native.adapter.handle_triage(args))
+    assert result["error"] == "adapter-error"
+    assert not native.state.triage_log.exists()
+
+
+@pytest.mark.parametrize("args", [
+    {}, {"checkpoint": 1}, {"checkpoint": "x", "output": "/tmp/elsewhere"},
+    {"checkpoint": "x", "path": "/tmp/elsewhere"}, [],
+])
+def test_report_rejects_noncheckpoint_arguments(native, args):
+    result = json.loads(native.adapter.handle_report(args))
+    assert result["error"] == "adapter-error"
+    assert native.mailbox.calls == []
+
+
+def test_report_stale_checkpoint_refuses_without_provider_access(native):
+    native.configure()
+    refusal(native.adapter.handle_report, {"checkpoint": "not-current"}, 1, "invalid")
+    assert native.mailbox.calls == []
+
+
+def test_invalid_receipt_does_not_mark_seen(native):
+    native.configure()
+    success(native.adapter.handle_fetch)
+    refusal(native.adapter.handle_triage, {
+        "message_id": "--leading-dash", "category": "other",
+        "source_ref": "unknown", "passages": [], "missing_context": [],
+    }, 1, "invalid")
+    assert not native.state.triage_log.exists()
+    assert success(native.adapter.handle_status)["triaged"] == 0

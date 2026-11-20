@@ -10,5 +10,5 @@
     "categories": "action-needed,waiting-on-reply,newsletter,receipt,suspicious",
     "max_fetch_per_run": "25"
   },
-  "manifest_sha256": "bece5d1c936bbd715802ab48c1ef6954a623a44bb161886a2de5e593ec9981fe"
+  "manifest_sha256": "92c2c4bef13c37f0eacf3ba8df81589d4d4de66d3ab3dc873a018d6c774d0ba7"
 }

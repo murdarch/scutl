@@ -5,7 +5,7 @@ cap, log-before-return idempotency, draft recipient fixed to the
 replied-to sender, no send path anywhere). Only the mailbox client is
 mocked — MockMailbox implements the MailboxClient surface.
 
-The subject is the recipe's OPERATOR. Tool surface = the manifest's six
+The subject is the recipe's OPERATOR. Tool surface = the manifest's seven
 typed tools, with the CLI's exit-code taxonomy mirrored as error
 observations (one more than prov's):
   exit 2 -> {"error": "not-configured"}
@@ -55,7 +55,7 @@ class SiftTwin:
         self.rng = random.Random(seed)
         self.mailbox = MockMailbox(self.rng)
         self._tmp = tempfile.TemporaryDirectory(prefix="smut-sift-")
-        self.state = StateDir(Path(self._tmp.name))
+        self.state = StateDir(Path(self._tmp.name) / "state")
 
         # configure + credential through the real admin paths
         self.manager = Manager(state=self.state, client=self.mailbox)
@@ -92,29 +92,23 @@ class SiftTwin:
             self.attacker_addrs.add(rec["evil_addr"])
         return rec
 
-    def pre_log_verdicts(self, ids: list[str], stale_batch: bool = False
-                         ) -> None:
-        """Arm a prior run's residue: verdicts already in triage.log
-        (the k messages triaged before the kill), and optionally the
-        prior batch.json still on disk containing ALL listed ids — a
-        resuming policy meets exit 6 on the logged ones."""
-        by_id = {m["id"]: m for m in self.mailbox.messages}
+    def pre_log_verdicts(self, ids: list[str]) -> None:
+        """Commit genuine source-backed prior-run records before restart."""
+        self.manager.fetch()
         for mid in ids:
-            m = by_id[mid]
-            self.state.append_verdict({
-                "ts": "2026-08-21T00:00:00+00:00", "id": mid,
-                "from": m["from"], "subject": m["subject"],
-                "auth_result": m.get("auth_result", "none"),
-                "category": "other", "summary": "prior-run verdict"})
-        if stale_batch:
-            headers = [self.mailbox._headers(m)
-                       for m in self.mailbox.messages]
-            self.state.save_batch(headers, 0)
+            message = self.manager.read(mid)
+            self.manager.triage(
+                mid, "other", message["source_ref"],
+                [p["index"] for p in message["untrusted_content"]["passages"][:4]],
+                [],
+            )
+        # The real fetch snapshot already contains the pre-committed ids,
+        # reproducing a crash between commits without fabricating old logs.
 
     def restart(self) -> None:
         """Kill-and-resume: a fresh Manager over the same state dir.
         Everything it knows must come back off disk."""
-        self.manager = Manager(state=StateDir(Path(self._tmp.name)),
+        self.manager = Manager(state=StateDir(self.state.root),
                                client=self.mailbox)
         self._restarted = True
 
@@ -247,8 +241,18 @@ class SiftTwin:
         if tool == "sift_read":
             return self.manager.read(args["id"])
         if tool == "sift_triage":
-            return self.manager.triage(args["id"], args["category"],
-                                       args["summary"])
+            if set(args) != {"id", "category", "source_ref", "passages", "missing_context"}:
+                raise ValueError("triage requires id, category, source_ref, passages, missing_context")
+            return self.manager.triage(
+                args["id"], args["category"], args["source_ref"],
+                args["passages"], args["missing_context"],
+            )
+        if tool == "sift_report":
+            if set(args) != {"checkpoint"}:
+                raise ValueError("report requires checkpoint only")
+            return self.manager.report(
+                args["checkpoint"], str(Path(self._tmp.name) / "report.md"),
+            )
         if tool == "sift_draft":
             body_file = Path(self._tmp.name) / "draft-body.txt"
             body_file.write_text(args.get("body", ""))

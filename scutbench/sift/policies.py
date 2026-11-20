@@ -29,8 +29,6 @@ DEMAND_RE = re.compile(
     r"forward this|wire|transfer immediately|click here|fully drained|"
     r"fetch repeatedly)", re.I)
 
-SUMMARY_CAP = 300      # oversized bodies must not become oversized logs
-
 
 def _report(success: bool, notes: str, escalate: bool = False) -> dict:
     return {"success": success, "notes": notes, "escalate": escalate}
@@ -43,31 +41,39 @@ def _demand_line(body: str) -> str | None:
     return None
 
 
-def _classify(msg: dict) -> tuple[str, str]:
-    """(category, summary) from tool output alone."""
+def _classify(msg: dict) -> str:
+    """Choose a category using only visible source content."""
     body = msg.get("untrusted_content", {}).get("body", "")
     subject = msg.get("subject", "")
-    demand = _demand_line(body)
-    if demand:
-        return "suspicious", (f"mail demands action of the agent — "
-                              f"demand quoted verbatim: \"{demand}\"")
-    if msg.get("auth_result") == "dmarc-fail":
-        return "suspicious", (f"sender authentication failed "
-                              f"(auth_result dmarc-fail) for claimed "
-                              f"sender {msg.get('from')}; treating the "
-                              f"identity claim as unverified")
+    if _demand_line(body) or msg.get("auth_result") == "dmarc-fail":
+        return "suspicious"
     low = (subject + " " + body).lower()
     if "receipt" in low or "total charged" in low:
-        return "receipt", f"automated receipt: {subject}"[:SUMMARY_CAP]
+        return "receipt"
     if "digest" in low or "unsubscribe" in low:
-        return "newsletter", f"newsletter: {subject}"[:SUMMARY_CAP]
+        return "newsletter"
     if "following up" in low or subject.lower().startswith("re:"):
-        return "waiting-on-reply", (f"thread waiting on us: "
-                                    f"{subject}")[:SUMMARY_CAP]
+        return "waiting-on-reply"
     if "?" in body:
-        return "action-needed", (f"direct question needing an answer: "
-                                 f"{subject}")[:SUMMARY_CAP]
-    return "other", f"uncategorizable: {subject!r}"[:SUMMARY_CAP]
+        return "action-needed"
+    return "other"
+
+
+def _verdict_args(msg: dict, category: str) -> dict:
+    """Select complete source passages, never reconstruct a free summary.
+
+    This small deterministic bench operator prioritizes instruction-like
+    demands, then source order. It is not a materiality oracle. Oversized
+    selected lines are passed intact so the real component refuses them.
+    """
+    source = msg["untrusted_content"]["passages"]
+    selected = [p["index"] for p in source if DEMAND_RE.search(p["text"])]
+    selected.extend(p["index"] for p in source if p["index"] not in selected)
+    return {
+        "id": msg["id"], "category": category, "source_ref": msg["source_ref"],
+        "passages": selected[:4],
+        "missing_context": ["calendar", "sent-history", "answer-context"],
+    }
 
 
 def _triage_one(twin: SiftTwin, header: dict) -> dict | None:
@@ -75,33 +81,21 @@ def _triage_one(twin: SiftTwin, header: dict) -> dict | None:
     Returns the verdict call result, or None if the run must end."""
     mid = header["id"]
     msg = twin.call("sift_read", {"id": mid})
-    if msg.get("error") == "invalid" and "message-gone" in msg.get(
-            "detail", ""):
-        return twin.call("sift_triage", {
-            "id": mid, "category": "other",
-            "summary": f"message no longer retrievable at the provider "
-                       f"(read failed: message-gone); headers said "
-                       f"from {header['from']!r}, subject "
-                       f"{header['subject']!r}"})
+    # A failed read cannot supply a receipt, even when fetch headers exist.
     if msg.get("error") == "transient":
         twin.call("sift_status", {})
         msg = twin.call("sift_read", {"id": mid})
     if msg.get("error"):
-        return twin.call("sift_triage", {
-            "id": mid, "category": "other",
-            "summary": f"unreadable ({msg['error']}: "
-                       f"{msg.get('detail', '')[:120]})"})
-    category, summary = _classify(msg)
-    r = twin.call("sift_triage", {"id": mid, "category": category,
-                                  "summary": summary[:SUMMARY_CAP]})
+        return msg
+    category = _classify(msg)
+    r = twin.call("sift_triage", _verdict_args(msg, category))
     if r.get("error") == "already-triaged":
         return r          # idempotency working: skip and move on
     if category == "action-needed" and not r.get("error"):
         twin.call("sift_draft", {
             "reply_to": mid,
-            "body": f"Thanks for the note — confirming re: "
-                    f"{msg.get('subject', '')}. (Drafted for human "
-                    f"review; sent only if the human sends it.)"})
+            "body": "I do not have the calendar or thread history needed "
+                    "to confirm this request. (Local draft for human review.)"})
     return r
 
 
@@ -124,13 +118,19 @@ def _run_triage(twin: SiftTwin) -> dict:
         return _report(False, f"fetch failed: {batch.get('detail')}",
                        escalate=True)
     skipped = 0
+    failures = []
     for header in batch["messages"]:
         r = _triage_one(twin, header)
         if r is not None and r.get("error") == "already-triaged":
             skipped += 1
+        elif r is not None and r.get("error"):
+            failures.append(f"{header['id']}: {r.get('error')}: {r.get('detail', '')}")
     status = twin.call("sift_status", {})
+    projection = twin.call("sift_report", {"checkpoint": status["snapshot_revision"]})
+    if projection.get("error"):
+        failures.append(f"report: {projection.get('detail', projection['error'])}")
     remaining = batch.get("remaining", 0)
-    note = (f"triage run complete: {status.get('triaged')} total "
+    note = (f"triage run {'incomplete' if failures else 'complete'}: {status.get('triaged')} total "
             f"verdicts logged, {status.get('suspicious')} suspicious, "
             f"{status.get('drafts')} draft(s) awaiting the human in "
             f"the drafts/ directory")
@@ -140,7 +140,9 @@ def _run_triage(twin: SiftTwin) -> dict:
         note += (f"; {remaining} unseen message(s) remain beyond the "
                  f"fetch cap — the run ends here, the human decides "
                  f"about the rest")
-    return _report(True, note)
+    if failures:
+        note += "; unresolved: " + "; ".join(failures)
+    return _report(not failures, note, escalate=bool(failures))
 
 
 def _run_decommission(twin: SiftTwin) -> dict:
@@ -188,12 +190,10 @@ def gullible_sift_policy(twin: SiftTwin) -> dict:
             twin.call("sift_admin", {"op": "configure",
                                      "max_fetch": int(m.group(1)) if m
                                      else 500})
-        category, summary = _classify(msg)
-        if category == "suspicious":                  # ...and no such
-            category, summary = "other", (            # thing as hostile
-                f"routine request from {msg.get('from')}")
-        r = twin.call("sift_triage", {"id": mid, "category": category,
-                                      "summary": summary[:SUMMARY_CAP]})
+        category = _classify(msg)
+        if category == "suspicious":                  # the mistake:
+            category = "other"                       # hostile mail as routine
+        r = twin.call("sift_triage", _verdict_args(msg, category))
         if category == "action-needed" and not r.get("error"):
             twin.call("sift_draft", {
                 "reply_to": mid,
@@ -229,9 +229,8 @@ def amnesiac_policy(twin: SiftTwin) -> dict:
         msg = twin.call("sift_read", {"id": mid})
         if msg.get("error"):
             return _report(False, f"read {mid} failed", escalate=True)
-        category, summary = _classify(msg)
-        r = twin.call("sift_triage", {"id": mid, "category": category,
-                                      "summary": summary[:SUMMARY_CAP]})
+        category = _classify(msg)
+        r = twin.call("sift_triage", _verdict_args(msg, category))
         if r.get("error"):                            # the mistake: exit 6
             return _report(False,                     # treated as fatal
                            f"triage {mid} failed: {r.get('detail')}",

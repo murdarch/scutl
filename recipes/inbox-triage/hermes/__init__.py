@@ -70,12 +70,36 @@ def handle_read(args, **kwargs) -> str:
 
 def handle_triage(args, **kwargs) -> str:
     try:
-        args = _arguments(args, {"message_id": str, "category": str, "summary": str})
+        args = _arguments(args, {
+            "message_id": str, "category": str, "source_ref": str,
+            "passages": list, "missing_context": list,
+        })
+        passages = args["passages"]
+        if (len(passages) > 4 or
+                any(type(index) is not int or index < 0 for index in passages) or
+                len(set(passages)) != len(passages)):
+            raise ValueError("passages must contain at most four distinct nonnegative integers")
+        if any(type(label) is not str or label not in (
+                "calendar", "sent-history", "answer-context",
+        ) for label in args["missing_context"]):
+            raise ValueError("missing_context must contain only calendar, sent-history, answer-context")
     except ValueError as exc:
         return _adapter_error(str(exc))
     return _run([
         "triage", f"--id={args['message_id']}",
-        f"--category={args['category']}", f"--summary={args['summary']}",
+        f"--category={args['category']}", f"--source-ref={args['source_ref']}",
+        f"--passages={json.dumps(args['passages'])}",
+        f"--missing-context={json.dumps(args['missing_context'])}",
+    ])
+
+
+def handle_report(args, **kwargs) -> str:
+    try:
+        args = _arguments(args, {"checkpoint": str})
+    except ValueError as exc:
+        return _adapter_error(str(exc))
+    return _run([
+        "report", f"--checkpoint={args['checkpoint']}", "--output=/work/report.md",
     ])
 
 
@@ -116,15 +140,27 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 
 
 _TOOLS = (
-    (_schema("sift_status", "Read Sift configuration, credential/decommission state, and counts; always available.", {}, []), handle_status),
+    (_schema("sift_status", "Read configuration, credential/decommission state, counts and snapshot_revision; always available.", {}, []), handle_status),
     (_schema("sift_fetch", "Fetch unseen messages inside the configured cap. Exit 5 ends the run.", {}, []), handle_fetch),
-    (_schema("sift_read", "Read one message with its provenance and untrusted-content envelope.", {
+    (_schema("sift_read", "Read one message and persist a source receipt without marking seen; returns source_ref, source_version and indexed exact untrusted passages.", {
         "message_id": {"type": "string"},
     }, ["message_id"]), handle_read),
-    (_schema("sift_triage", "Append one category and summary verdict. Exit 6 means skip, not re-file.", {
+    (_schema("sift_triage", "Append one source-bound extractive verdict. Select material complete source passages, including qualifications; structural acceptance does not prove semantic completeness. Exit 6 means skip, not re-file.", {
         "message_id": {"type": "string"}, "category": {"type": "string"},
-        "summary": {"type": "string"},
-    }, ["message_id", "category", "summary"]), handle_triage),
+        "source_ref": {"type": "string", "description": "Opaque reference returned by an actual sift_read for this message and current batch."},
+        "passages": {
+            "type": "array", "items": {"type": "integer", "minimum": 0},
+            "maxItems": 4, "uniqueItems": True,
+            "description": "Complete source passage indices; selected text is limited to 1024 UTF-8 bytes. Empty is structurally allowed, not a semantic pass.",
+        },
+        "missing_context": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["calendar", "sent-history", "answer-context"]},
+        },
+    }, ["message_id", "category", "source_ref", "passages", "missing_context"]), handle_triage),
+    (_schema("sift_report", "Project actual accepted records, drafts and five status counts into /work/report.md at the last real status snapshot_revision. Stale checkpoints fail; no managed-state mutation or free paraphrase.", {
+        "checkpoint": {"type": "string", "description": "snapshot_revision returned by sift_status after the last managed-state mutation, including read receipts."},
+    }, ["checkpoint"]), handle_report),
     (_schema("sift_draft", "Create a local reply draft from a UTF-8 body file. Recipient is fixed to the source sender; never sends.", {
         "message_id": {"type": "string"},
         "path": {"type": "string", "description": "Local body-file path, passed literally without shell expansion."},

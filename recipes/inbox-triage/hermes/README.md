@@ -1,13 +1,17 @@
 # Canonical Sift native plugin
 
-This directory is the maintained Hermes integration for the **existing**
-`recipes/inbox-triage/recipe.yaml`, not an independent recipe or a Hermes fork.
-It ships six native tools and the read-only namespaced skill
+This directory is the maintained Hermes integration for the source-bound
+experimental `recipes/inbox-triage/recipe.yaml`, not a Hermes fork.
+It ships seven native tools and the read-only namespaced skill
 `sift-native:inbox-triage`. Installing it replaces model-written adapter/skill
 boilerplate with maintained source. That changes the measurement: installation
 and a no-model smoke do not establish fresh-model acceptance, model recovery,
 or a semantic comparison with previous trials. No live mailbox provider is
 blessed by this recipe revision.
+
+Use fresh isolated candidate state/profile only. There is no legacy verdict
+backfill, old-summary shim or production-state migration. Earlier adopted
+source acceptance is not candidate qualification.
 
 ## Install from the source checkout
 
@@ -72,9 +76,9 @@ Do not create a second unnamespaced skill in the profile's global `skills/`.
 ## Handler and transport contract
 
 The module exports `register(ctx)` and
-`handle_status`, `handle_fetch`, `handle_read`, `handle_triage`, `handle_draft`,
-`handle_admin`, each taking an argument object plus optional Hermes keyword
-context. The six tool schemas are raw `{name, description, parameters}` objects.
+`handle_status`, `handle_fetch`, `handle_read`, `handle_triage`, `handle_report`,
+`handle_draft`, `handle_admin`, taking an argument object plus optional Hermes
+context. Seven raw `{name, description, parameters}` schemas are registered.
 
 The executable is fixed from `Path.home()` when the module is imported. Each
 valid operation makes exactly one real CLI call with a literal argv list, no
@@ -92,6 +96,42 @@ Invalid native inputs or a failed subprocess launch/decode instead return an
 explicit `error: adapter-error`, message, `exit_code: 1`, and empty streams;
 that is an adapter refusal, not a fabricated CLI result. There is no arbitrary
 command, recipient, admin operation, or approval-token tool.
+
+`sift_read({"message_id": ...})` returns top-level `source_ref` and
+`source_version`, retaining provenance, untrusted body/banner and complete
+indexed `untrusted_content.passages` with exact line endings. Receipt
+persistence changes managed-state revision but does not mark seen.
+
+`sift_triage` requires exactly `message_id`, `category`, `source_ref`,
+`passages` (integer array) and `missing_context` (enum array). No free
+`summary`, identity/referent alias or factual prose fallback remains.
+Passages are at most four distinct nonnegative complete-line indices, with
+1024 selected UTF-8 bytes; source subjects above 512 UTF-8 bytes fail, never
+truncate. Enum values are only `calendar`, `sent-history`, `answer-context`.
+Booleans are not integer selectors. Unknown/stale/foreign/tampered receipts
+and invalid evidence fail before append. The component creates visibly
+quoted message id/from/full subject and exact selected source text.
+
+After every managed-state mutation, including reads, obtain real
+`sift_status({})`. Use its `snapshot_revision` in
+`sift_report({"checkpoint": ...})`; this invokes literal argv
+`report`, `--checkpoint=<value>`, `--output=/work/report.md`, with no shell.
+No native output/path override exists. The runtime provides writable `/work`
+outside managed state. The real renderer returns `path`, `sha256`,
+`snapshot_revision`, `source_bindings`, `record_bindings`, `draft_bindings`,
+`state_unchanged`, projecting actual accepted records/drafts and the five
+counts `triaged`, `suspicious`, `drafts`, `batch.size`, `batch.remaining`.
+The first three are cumulative; batch counts describe the saved fetch.
+The report file is observed separately; projection leaves managed state
+unchanged. Stale state needs a new real in-budget checkpoint/projection,
+never an operator repair, hidden retry or free paraphrase.
+
+An empty or incomplete passage selection may be structurally valid and
+still fail semantic/materiality review. Body-only identifiers, referents,
+uncertainty, negations, sensible categories and useful concision remain the
+operator's responsibility. Missing/rewritten/stale reports and unsupported
+final-chat claims remain consumer failures. Safe component operations do
+not confine other Hermes tools or prove whole-agent safety.
 
 ## Canonical context regeneration
 
@@ -119,7 +159,7 @@ treat it as an independently maintained recipe. The installed plugin needs
 only the stdlib, its bundled files, and the external Sift CLI; it never imports
 the lowerer or generates context at runtime.
 
-## Source-backed native integration and no-model checks
+## Source-backed integration and qualification boundary
 
 The supported directory/enable path was inspected in genuine Hermes commit
 `eaac327fac2c2db0b77ee143989d49b29a6f36cb`:
@@ -140,27 +180,13 @@ The supported directory/enable path was inspected in genuine Hermes commit
 directory layout followed by native enable, with no Hermes patch or model code
 generation.
 
-A no-model component/API smoke against that commit ran in disposable isolated
-`HOME` and `HERMES_HOME` directories, with private writable managed-store/cache
-copies, a real canonical Sift entry point at the fixed path, and a local
-mailbox fixture. The actual installer and
-`hermes plugins doctor <installed-path> --ci` both exited zero. Genuine native
-PluginManager/tool-registry discovery exposed all six tools, and native skill
-preloading included the exact shipped `sift-native:inbox-triage` body.
+The previously adopted six-tool/free-summary smoke and its test totals do not
+apply to this candidate. Qualify the actual installed seven schemas, generated
+skill and real HTTP/native/CLI/component/report path in disposable state.
+Permanent regression tests cover strict admission, durable literal source
+content, duplicate/error nonmutation, recipient/path confinement and stale
+checkpoint refusal, not incidental wording or mock forwarding echoes.
 
-Real native dispatch also checked unconfigured refusal, literal summaries in
-stdout and the durable log, duplicate refusal without a log append, draft
-recipient confinement with a bare flag-like body-file path, approval refusal
-without config mutation, and a subsequent fetch skipping logged IDs. The
-smoke exposed neither a model endpoint nor external network access.
-
-The behavioral suite plus the existing emitter and manifest contracts passed
-119 tests:
-
-```sh
-.venv/bin/python -m pytest recipes/inbox-triage/sift/tests tests/test_emit.py tests/test_manifest_contracts.py -q
-```
-
-These checks establish install/configure and component/API behavior, not a
-semantic mailbox-task result, a subject-model run, fresh-model recovery,
-full `ADAPT.md` acceptance, or live mailbox-provider acceptance.
+Installation, no-model qualification and a source-bound renderer do not
+establish a semantic mailbox-task result, model reliability, full ADAPT
+acceptance, live-provider acceptance or production migration.

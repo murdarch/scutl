@@ -1,5 +1,10 @@
 # Install inbox triage in Hermes
 
+This checkout is an experimental source-bound candidate, not a production
+upgrade. Use a fresh isolated profile and `SCUTL_SIFT_STATE`; no legacy log
+backfill or state migration is supplied. Existing adopted-recipe acceptance
+does not qualify these changed component/schema/skill bytes.
+
 From **this recipe directory** (`recipes/inbox-triage/`), run:
 
 ```sh
@@ -24,6 +29,14 @@ skill. From another working directory, use the absolute path to
 - The operator places mailbox credentials and approves configuration. This
   command does neither, grants no approval tokens and touches no real mailbox.
   No live mailbox provider is blessed by this revision.
+- Install the matching candidate component and plugin together. Seven native
+  tools include strict five-key `sift_triage` (actual source receipt plus
+  passage indices, no summary fallback) and checkpointed `sift_report`.
+  Reading persists a receipt; obtain final `sift_status` after all managed
+  mutations, then give its `snapshot_revision` to `sift_report`. Its literal
+  output is `/work/report.md`; the runtime must provide that writable
+  report directory outside Sift managed state. Report creation is not a
+  managed-state write. Do not replace the projection with free prose.
 
 The command copies the shipped plugin and namespaced skill into
 `$HERMES_HOME/plugins/sift-native`, then invokes **Hermes' own**

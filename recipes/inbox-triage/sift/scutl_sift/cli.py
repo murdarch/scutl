@@ -57,7 +57,15 @@ def main(argv: list[str] | None = None) -> None:
     tp = sub.add_parser("triage")
     tp.add_argument("--id", required=True)
     tp.add_argument("--category", required=True)
-    tp.add_argument("--summary", required=True)
+    tp.add_argument("--source-ref", required=True)
+    tp.add_argument("--passages", required=True, type=json.loads,
+                    help="JSON array of complete source-passage indices")
+    tp.add_argument("--missing-context", required=True, type=json.loads,
+                    help="JSON array of calendar, sent-history or answer-context labels")
+
+    report = sub.add_parser("report")
+    report.add_argument("--checkpoint", required=True)
+    report.add_argument("--output", default="/work/report.md")
 
     dp = sub.add_parser("draft")
     dp.add_argument("--reply-to", required=True,
@@ -85,7 +93,10 @@ def main(argv: list[str] | None = None) -> None:
         elif args.cmd == "read":
             out = manager.read(args.id)
         elif args.cmd == "triage":
-            out = manager.triage(args.id, args.category, args.summary)
+            out = manager.triage(args.id, args.category, args.source_ref,
+                                 args.passages, args.missing_context)
+        elif args.cmd == "report":
+            out = manager.report(args.checkpoint, args.output)
         elif args.cmd == "draft":
             out = manager.draft(args.reply_to, args.body_file)
         elif args.cmd == "admin" and args.op == "configure":

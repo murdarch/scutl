@@ -29,7 +29,7 @@ configuration; the execute loop and guardrails are taken from that same
 manifest. bundle.json records its SHA-256 and resolved parameters. Regenerate with:
 `.venv/bin/python recipes/inbox-triage/hermes/refresh_context.py`.
 
-Use the six native tools for the CLI operations shown in the canonical
+Use the seven native tools for the CLI operations shown in the canonical
 workflow. Do not build a shell command or generate an adapter:
 
 | Canonical operation | Native tool arguments |
@@ -37,7 +37,8 @@ workflow. Do not build a shell command or generate an adapter:
 | `sift status` | `sift_status({})` |
 | `sift fetch` | `sift_fetch({})` |
 | `sift read --id <id>` | `sift_read({"message_id": "<id>"})` |
-| `sift triage --id <id> --category <category> --summary <summary>` | `sift_triage({"message_id": "<id>", "category": "<category>", "summary": "<summary>"})` |
+| `sift triage --id <id> --category <category> --source-ref <source_ref> --passages <JSON integer array> --missing-context <JSON enum array>` | `sift_triage({"message_id": "<id>", "category": "<category>", "source_ref": "<source_ref>", "passages": [0], "missing_context": []})` with the actual read receipt and chosen indices |
+| `sift report --checkpoint <snapshot_revision> --output /work/report.md` | `sift_report({"checkpoint": "<snapshot_revision>"})` from the actual final status |
 | `sift draft --reply-to <id> --body-file <path>` | `sift_draft({"message_id": "<id>", "path": "<path>"})` |
 | `sift admin configure --categories <CSV> --max-fetch <integer>` | `sift_admin({"op": "configure", "categories": "<CSV>", "max_fetch_per_run": 25})` with the chosen integer cap |
 | `sift admin decommission` | `sift_admin({"op": "decommission"})` |
@@ -57,6 +58,19 @@ and exit_code. An error field equal to adapter-error instead identifies a
 native argument or transport failure, not a completed CLI operation. The
 adapter never retries or rewords component results; any subsequent operation
 must follow the canonical rules below.
+
+Reading creates a source receipt, so the final status must follow the last
+read as well as the last fetch/triage/draft. Triage accepts only the five
+keys shown above: no summary fallback, identity aliases or free missing-fact
+prose. Passage indices refer to complete exact source lines, with at most
+four distinct nonnegative indices and 1024 selected UTF-8 bytes; full source
+subjects above 512 UTF-8 bytes are refused, not clipped. Missing-context
+labels are only calendar, sent-history and answer-context. An empty or
+incomplete selection can be structurally accepted and still fail consumer
+fidelity; preserve body-only material facts, roles, ambiguity and negations.
+Use the real sift_report projection, not shell-written replacement prose.
+Its fixed native output is /work/report.md. A stale checkpoint, missing or
+rewritten report, or unsupported final-chat claim is not success.
 
 Component/plugin installation is an operator prerequisite (see the recipe's
 ADAPT.md); no generated Python, skill, or package-install command is needed

@@ -13,6 +13,7 @@ Layout (state_dir, default ~/.scutl/triage, dir mode 0700):
   batch.json            the current fetch batch (headers only, no bodies).
                         The cap is enforced as batch membership: read /
                         triage / draft refuse ids outside it
+  receipts/             private read-issued source snapshots; not seen-state
   drafts/               one file per reply draft; the human sends (or not)
                         from their own client
   decommission.marker   written by decommission(); fetch/read/triage/draft
@@ -24,7 +25,14 @@ Layout (state_dir, default ~/.scutl/triage, dir mode 0700):
 from __future__ import annotations
 
 import json
+import hashlib
+import fcntl
 import os
+import re
+import tempfile
+import uuid
+
+from .evidence import fingerprint, source_message
 from pathlib import Path
 
 
@@ -118,12 +126,14 @@ class StateDir:
     # -- triage log (append-only; seen-state derives from it) ------------
     def append_verdict(self, record: dict) -> None:
         line = json.dumps(record, separators=(",", ":")) + "\n"
-        fd = os.open(self.triage_log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-        try:
-            os.write(fd, line.encode())
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+        fd = os.open(self.triage_log, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
+        with os.fdopen(fd, "ab") as output:
+            fcntl.flock(output.fileno(), fcntl.LOCK_EX)
+            if record["id"] in self.triaged_ids():
+                raise AlreadyTriaged(record["id"])
+            output.write(line.encode("utf-8"))
+            output.flush()
+            os.fsync(output.fileno())
 
     def read_verdicts(self) -> list[dict]:
         if not self.triage_log.exists():
@@ -138,7 +148,8 @@ class StateDir:
         fd = os.open(self.batch_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             os.write(fd, json.dumps(
-                {"messages": headers, "remaining": remaining}).encode())
+                {"run_id": uuid.uuid4().hex, "messages": headers,
+                 "remaining": remaining}).encode())
             os.fsync(fd)
         finally:
             os.close(fd)
@@ -153,3 +164,80 @@ class StateDir:
             if h["id"] == message_id:
                 return h
         return None
+
+    def issue_receipt(self, message: dict) -> tuple[str, dict]:
+        source = source_message(message)
+        receipt = {
+            "profile": str(self.root.resolve()),
+            "run_id": self.load_batch().get("run_id"),
+            "nonce": uuid.uuid4().hex,
+            "source": source,
+            "source_version": fingerprint(source),
+        }
+        reference = "r-" + fingerprint(receipt)
+        folder = self.root / "receipts"
+        folder.mkdir(mode=0o700, exist_ok=True)
+        fd = os.open(folder / (reference + ".json"),
+                     os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(json.dumps(receipt, ensure_ascii=False).encode("utf-8"))
+            output.flush()
+            os.fsync(output.fileno())
+        lock_fd = os.open(self.root / "source_versions.lock",
+                          os.O_RDWR | os.O_CREAT, 0o600)
+        with os.fdopen(lock_fd, "ab") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            versions = self.source_versions()
+            versions[source["id"]] = receipt["source_version"]
+            with tempfile.NamedTemporaryFile(dir=self.root, prefix=".source-versions-", delete=False) as target:
+                temporary = Path(target.name)
+                try:
+                    target.write(json.dumps(versions).encode("utf-8"))
+                    target.flush()
+                    os.fsync(target.fileno())
+                    os.replace(temporary, self.root / "source_versions.json")
+                finally:
+                    temporary.unlink(missing_ok=True)
+        return reference, receipt
+
+    def source_versions(self) -> dict:
+        path = self.root / "source_versions.json"
+        if not path.exists():
+            return {}
+        versions = json.loads(path.read_text())
+        if type(versions) is not dict or any(
+                type(key) is not str or type(value) is not str for key, value in versions.items()):
+            raise ValueError("source-version index is malformed")
+        return versions
+
+    def load_receipt(self, reference: str, message_id: str, *, current: bool = True) -> dict:
+        if type(reference) is not str or not re.fullmatch(r"r-[0-9a-f]{64}", reference):
+            raise ValueError("invalid source reference; read the message first")
+        try:
+            receipt = json.loads((self.root / "receipts" / (reference + ".json")).read_text())
+            source = source_message(receipt["source"])
+            valid = (
+                "r-" + fingerprint(receipt) == reference
+                and receipt["profile"] == str(self.root.resolve())
+                and receipt["run_id"] == self.load_batch().get("run_id")
+                and receipt["source_version"] == fingerprint(source)
+                and source["id"] == message_id
+                and (not current or self.source_versions().get(message_id) == receipt["source_version"])
+            )
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ValueError("source receipt is missing, unreadable or malformed") from exc
+        if not valid:
+            raise ValueError("source receipt is stale, foreign or modified")
+        return receipt
+
+    def revision(self) -> str:
+        """Read-only managed-state revision; report artifacts live outside it."""
+        entries = {}
+        if self.root.exists():
+            for path in sorted(self.root.rglob("*")):
+                if path.is_symlink():
+                    raise ValueError("managed state must not contain symlinks")
+                if path.is_file():
+                    entries[str(path.relative_to(self.root))] = hashlib.sha256(
+                        path.read_bytes()).hexdigest()
+        return fingerprint(entries)

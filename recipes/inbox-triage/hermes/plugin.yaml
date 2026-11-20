@@ -7,5 +7,6 @@ provides_tools:
   - sift_fetch
   - sift_read
   - sift_triage
+  - sift_report
   - sift_draft
   - sift_admin
