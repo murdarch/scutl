@@ -267,6 +267,7 @@ execute:
     sequence are still one claim; re-read rc_status before reporting any
     recovery you did not yourself cause (renew-1 finding: stale-world-model
     narration is where smol reporting dies).
+
     For every fetched claim, complete an evidence-backed three-way
     disposition: pay what the recorded settle and policy both allow, and
     confirm the actual refund receipt; refuse what the ledger does not
