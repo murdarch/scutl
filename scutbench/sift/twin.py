@@ -94,6 +94,7 @@ class SiftTwin:
 
     def pre_log_verdicts(self, ids: list[str]) -> None:
         """Commit genuine source-backed prior-run records before restart."""
+        read_count = len(self.mailbox.read_calls)
         self.manager.fetch()
         for mid in ids:
             message = self.manager.read(mid)
@@ -104,6 +105,8 @@ class SiftTwin:
             )
         # The real fetch snapshot already contains the pre-committed ids,
         # reproducing a crash between commits without fabricating old logs.
+        # Arming reads are not observations of the resumed subject.
+        del self.mailbox.read_calls[read_count:]
 
     def restart(self) -> None:
         """Kill-and-resume: a fresh Manager over the same state dir.
