@@ -319,6 +319,19 @@ execute:
     evidence. When a human resolves an escalation, sr_resolve appends
     the resolution naming the evidence. Never run the pass with
     write access to anything but findings.log.
+    Before closing each audit, read sr_findings without a state filter
+    and sr_status for the actual current state. Quote the pass's
+    computed records in, records categorized and conservation result;
+    invariant checked status, expected balance, actual balance, residue
+    and explained-by-findings terms; and each evidence leg's coverage.
+    Carry every current unresolved escalation with its evidence and
+    every honest-pending item with its confirmation deadline (the
+    record timestamp plus the configured confirmation interval is an
+    unambiguous deadline). Name absent legs and the findings they leave
+    unverified: true conservation or an explained residue does not
+    establish coverage of a missing leg. Close the report and final
+    answer with what actually completed and what remains pending,
+    escalated, absent or blocked, never a clean verdict over those gaps.
   command: "sprecon reconcile"
   residue: >
     a residue names its number, the invariant terms that produced it,
