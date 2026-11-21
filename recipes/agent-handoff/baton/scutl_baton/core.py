@@ -225,10 +225,30 @@ class Baton:
     def status(self) -> dict:
         lease = (json.loads(self.lease_path.read_text())
                  if self.lease_path.exists() else None)
-        manifest = (json.loads(self.manifest_path.read_text())
-                    if self.manifest_path.exists() else None)
-        report = (json.loads(self.report_path.read_text())
-                  if self.report_path.exists() else None)
+        manifest_blob = (self.manifest_path.read_bytes()
+                         if self.manifest_path.exists() else None)
+        manifest = (json.loads(manifest_blob)
+                    if manifest_blob is not None else None)
+        report_blob = (self.report_path.read_bytes()
+                       if self.report_path.exists() else None)
+        report = (json.loads(report_blob)
+                  if report_blob is not None else None)
+        manifest_digest = (_sha256_bytes(manifest_blob)
+                           if manifest_blob is not None else None)
+        report_digest = (_sha256_bytes(report_blob)
+                         if report_blob is not None else None)
+        entries = self._entries()
+        latest_staged = next((e for e in reversed(entries)
+                              if e["event"] == "staged"), None)
+        latest_released = next((e for e in reversed(entries)
+                                if e["event"] == "released"), None)
+        overrides = [e for e in entries if e["event"] == "override"]
+        overridden = {e["entry"] for e in overrides}
+        release_matches = bool(
+            report and latest_released
+            and latest_released["manifest_sha256"]
+            == report["manifest_sha256"])
+        token_present = (self.dir / TOKEN_TAKEOVER).exists()
         inbox_p = self.dir / INBOX_NAME
         inbox = json.loads(inbox_p.read_text()) if inbox_p.exists() else []
         counts: dict[str, int] = {}
@@ -237,12 +257,57 @@ class Baton:
         out = {
             "lease_holder": lease["holder"] if lease else None,
             "entry_counts": counts,
-            "journal_tail": self._entries()[-5:],
+            "journal_tail": entries[-5:],
             "inbox": inbox,
+            "handoff": {
+                "actor": self.actor,
+                "report": ({"path": str(self.report_path),
+                            "file_sha256": report_digest,
+                            "document": report}
+                           if report is not None else None),
+                "manifest_sha256": manifest_digest,
+                "journal": {
+                    "latest_staged": latest_staged,
+                    "latest_released": latest_released,
+                    "overrides": overrides,
+                    # Raw history, not an outcome for the current report.
+                    # committed/unwound events need not bind a report hash.
+                    "succession_events": [
+                        e for e in entries if e["event"] in
+                        ("commit-started", "committed", "unwound")],
+                },
+                "bindings": {
+                    "journal_report_sha256": (
+                        latest_staged["report_sha256"]
+                        if latest_staged else None),
+                    "report_matches_latest_stage": bool(
+                        report and latest_staged
+                        and report_digest == latest_staged["report_sha256"]
+                        and report["manifest_sha256"]
+                        == latest_staged["manifest_sha256"]
+                        and report["staged_by"] == latest_staged["by"]),
+                    "report_matches_manifest": bool(
+                        report and manifest_digest is not None
+                        and report["manifest_sha256"] == manifest_digest),
+                    "latest_release_matches_report_manifest": release_matches,
+                    "report_actor_matches_current": bool(
+                        report and report["staged_by"] == self.actor),
+                },
+                "authority": {
+                    "takeover_token_present": token_present,
+                    "unreachable_without_override": [
+                        r["id"] for r in report["entries"]
+                        if r["verdict"] == "UNREACHABLE"
+                        and r["id"] not in overridden] if report else [],
+                    "missing_release_and_token": (
+                        not release_matches and not token_present),
+                },
+                "lease": lease,
+            },
         }
         if manifest:
             age_h = (self._epoch() - manifest["packed_epoch"]) / 3600
-            out["manifest_sha256"] = _sha256_file(self.manifest_path)
+            out["manifest_sha256"] = manifest_digest
             out["manifest_age_hours"] = round(age_h, 1)
         if report:
             verdicts: dict[str, int] = {}

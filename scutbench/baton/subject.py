@@ -20,7 +20,20 @@ TOOLS_BATON = [
                        "entry counts, the journal tail, the last stage "
                        "report's verdict counts, and any operator "
                        "inbox messages relayed VERBATIM as data. "
-                       "Read-only, ungated.",
+                       "Also returns handoff facts: current actor; full "
+                       "report with path and actual file hash; actual "
+                       "manifest hash; full latest staged/released "
+                       "journal records, all historical overrides and "
+                       "raw succession events; separate report/stage, "
+                       "report/manifest, release/report-manifest and "
+                       "current-actor match facts; token-path presence "
+                       "(not content), unreachable IDs without historical "
+                       "override, missing release-and-token fact; full "
+                       "lease. Missing sources remain null/false. "
+                       "History is not a current report outcome and "
+                       "actor equality is not task freshness. "
+                       "No probes, token consumption, state writes or "
+                       "authorization. Read-only, ungated.",
         "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {
         "name": "bt_pack",

@@ -391,3 +391,168 @@ def test_cli_secret_refusal_exit_3(estate):
     code, out = _cli(estate, "pack", actor="elder")
     assert code == 3 and out["error"] == "secret-refused"
     assert "hunter2-kek-passphrase" not in out["detail"]
+
+
+# -- status: source-bound facts, never a succession action ----------------
+
+def test_status_preserves_tokens_and_state_until_real_commit(estate):
+    pred = Baton(estate["state"], actor="elder")
+    digest = pred.pack()["manifest_sha256"]
+    heir = Baton(estate["state"], actor="heir")
+    heir.stage(digest)
+    before_token = heir.status()["handoff"]
+    assert before_token["journal"]["latest_released"] is None
+    assert before_token["authority"]["missing_release_and_token"] is True
+    takeover = estate["state"] / TOKEN_TAKEOVER
+    takeover.write_text("owner approval\n")
+    override = estate["state"] / TOKEN_OVERRIDE
+    override.write_text("separate approval\n")
+    before = {p.name: p.read_bytes() for p in estate["state"].iterdir()}
+    first = heir.status()
+    assert heir.status() == first
+    assert {p.name: p.read_bytes() for p in estate["state"].iterdir()} == before
+    facts = first["handoff"]
+    assert facts["authority"]["takeover_token_present"] is True
+    assert facts["authority"]["missing_release_and_token"] is False
+    assert facts["journal"]["succession_events"] == []
+    assert facts["lease"] is None
+    assert heir.commit()["authority"] == "owner-token"
+    assert not takeover.exists()
+    assert override.read_text() == "separate approval\n"
+    assert heir.status()["handoff"]["lease"] == json.loads(
+        heir.lease_path.read_bytes())
+
+
+def test_status_distinguishes_inherited_report_from_current_actor(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    staged = heir.stage(digest)
+    estate["svc"].write_text("changed after the recorded probe\n")
+    status = Baton(estate["state"], actor="next-heir").status()
+    facts = status["handoff"]
+    assert facts["actor"] == "next-heir"
+    assert facts["report"]["path"] == str(heir.report_path)
+    assert facts["report"]["file_sha256"] == staged["report_sha256"]
+    assert facts["report"]["document"] == json.loads(
+        heir.report_path.read_bytes())
+    assert facts["report"]["document"]["entries"][0]["verdict"] == "MATCH"
+    assert facts["bindings"]["report_actor_matches_current"] is False
+    assert facts["bindings"]["report_matches_latest_stage"] is True
+    assert facts["bindings"]["report_matches_manifest"] is True
+    assert facts["bindings"]["latest_release_matches_report_manifest"] is True
+    assert status["last_report"]["verdicts"] == {"MATCH": 3}
+
+
+def test_status_exposes_tampered_report_and_actual_file_hash(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    staged = heir.stage(digest)
+    report = json.loads(heir.report_path.read_bytes())
+    report["entries"][0]["verdict"] = "DRIFT"
+    heir.report_path.write_text(json.dumps(report))
+    facts = heir.status()["handoff"]
+    assert facts["report"]["document"] == report
+    assert facts["report"]["file_sha256"] == hashlib.sha256(
+        heir.report_path.read_bytes()).hexdigest()
+    assert facts["bindings"]["journal_report_sha256"] == staged["report_sha256"]
+    assert facts["report"]["file_sha256"] != staged["report_sha256"]
+    assert facts["bindings"]["report_matches_latest_stage"] is False
+    assert facts["bindings"]["report_matches_manifest"] is True
+    with pytest.raises(DigestMismatch):
+        heir.commit()
+
+
+def test_status_distinguishes_changed_manifest_from_intact_stage(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    heir.stage(digest)
+    manifest = json.loads(heir.manifest_path.read_bytes())
+    manifest["entries"][0]["invariant"] = "different manifest bytes"
+    heir.manifest_path.write_text(json.dumps(manifest))
+    status = heir.status()
+    facts = status["handoff"]
+    assert facts["manifest_sha256"] == hashlib.sha256(
+        heir.manifest_path.read_bytes()).hexdigest()
+    assert status["manifest_sha256"] == facts["manifest_sha256"]
+    assert facts["manifest_sha256"] != digest
+    assert facts["bindings"]["report_matches_latest_stage"] is True
+    assert facts["bindings"]["report_matches_manifest"] is False
+    assert facts["bindings"]["latest_release_matches_report_manifest"] is True
+    with pytest.raises(DigestMismatch):
+        heir.commit()
+
+
+def test_status_keeps_old_succession_events_raw_after_restage(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    first = heir.stage(digest)
+    heir.commit()
+    history = [e for e in heir._entries()
+               if e["event"] in ("commit-started", "committed", "unwound")]
+    estate["svc"].write_text("new drift for the new report\n")
+    second = heir.stage(digest)
+    assert second["report_sha256"] != first["report_sha256"]
+    facts = heir.status()["handoff"]
+    assert facts["journal"]["succession_events"] == history
+    assert history[0]["report_sha256"] == first["report_sha256"]
+    assert "report_sha256" not in history[1]
+    assert facts["journal"]["latest_staged"]["report_sha256"] == second["report_sha256"]
+    assert facts["bindings"]["report_matches_latest_stage"] is True
+    assert facts["lease"]["holder"] == "heir"
+
+
+def test_status_finds_release_outside_five_entry_tail(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    for _ in range(6):
+        heir.stage(digest)
+    status = heir.status()
+    assert all(e["event"] == "staged" for e in status["journal_tail"])
+    facts = status["handoff"]
+    assert facts["journal"]["latest_released"] == heir._entries()[1]
+    assert facts["bindings"]["latest_release_matches_report_manifest"] is True
+    assert facts["authority"]["missing_release_and_token"] is False
+
+
+def test_status_lists_unreachable_minus_historical_overrides(estate):
+    registered = estate["state"] / ESTATE_NAME
+    declaration = json.loads(registered.read_text())
+    probes = []
+    for entry in declaration["entries"][:2]:
+        probe = estate["tmp"] / (entry["id"] + ".probe")
+        probe.write_text("#!/bin/sh\nprintf 'baseline\\n'\n")
+        probe.chmod(0o755)
+        entry["probe"] = {"kind": "command", "argv": [str(probe)]}
+        probes.append(probe)
+    registered.write_text(json.dumps(declaration))
+    _, heir, digest = _handoff_to_stage(estate)
+    for probe in probes:
+        probe.unlink()
+    heir.stage(digest)
+    facts = heir.status()["handoff"]
+    assert facts["authority"]["unreachable_without_override"] == [
+        "income-service", "wallet"]
+    (estate["state"] / TOKEN_OVERRIDE).touch()
+    heir.override("income-service", "owner accepts unavailable service")
+    # Restaging does not expire a historical override in the component.
+    heir.stage(digest)
+    facts = heir.status()["handoff"]
+    assert facts["journal"]["overrides"] == [
+        e for e in heir._entries() if e["event"] == "override"]
+    assert facts["journal"]["overrides"][0]["reason"] == (
+        "owner accepts unavailable service")
+    assert facts["authority"]["unreachable_without_override"] == ["wallet"]
+    with pytest.raises(UnreachableBlocked) as exc:
+        heir.commit()
+    assert exc.value.entry_ids == ["wallet"]
+
+
+def test_status_missing_sources_do_not_invent_stage_or_release(estate):
+    heir = Baton(estate["state"], actor="heir")
+    facts = heir.status()["handoff"]
+    assert facts["report"] is None
+    assert facts["manifest_sha256"] is None
+    assert facts["lease"] is None
+    assert facts["journal"]["latest_staged"] is None
+    assert facts["journal"]["latest_released"] is None
+    assert facts["bindings"]["journal_report_sha256"] is None
+    assert facts["bindings"]["report_matches_latest_stage"] is False
+    assert facts["bindings"]["report_matches_manifest"] is False
+    assert facts["bindings"]["latest_release_matches_report_manifest"] is False
+    assert facts["bindings"]["report_actor_matches_current"] is False
+    assert facts["authority"]["unreachable_without_override"] == []

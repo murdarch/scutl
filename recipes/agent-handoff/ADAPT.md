@@ -72,7 +72,20 @@ before any estate exists —
 
 ```json
 {"entry_counts": {}, "inbox": [], "journal_tail": [],
- "lease_holder": null}
+ "lease_holder": null,
+ "handoff": {
+   "actor": "agent", "report": null, "manifest_sha256": null,
+   "journal": {"latest_staged": null, "latest_released": null,
+               "overrides": [], "succession_events": []},
+   "bindings": {"journal_report_sha256": null,
+                "report_matches_latest_stage": false,
+                "report_matches_manifest": false,
+                "latest_release_matches_report_manifest": false,
+                "report_actor_matches_current": false},
+   "authority": {"takeover_token_present": false,
+                 "unreachable_without_override": [],
+                 "missing_release_and_token": true},
+   "lease": null}}
 ```
 
 — and additionally reports `manifest_sha256` / `manifest_age_hours`
@@ -83,6 +96,51 @@ runs an estate, a bare `baton status` answers for the LIVE estate —
 read-only and safe, but expect the populated form there, not the
 fresh-install one. A traceback or a nonzero exit is not healthy —
 stop and report it.
+
+### Status handoff contract
+
+The existing summary fields remain unchanged. `handoff` adds source-bound
+facts for consumers without running another probe or taking any action:
+
+- `actor` is the caller's actor. `report` is null or
+  `{path, file_sha256, document}`: the actual report path, SHA-256 of its
+  current bytes, and **the complete parsed report**, including every entry,
+  observed/baseline digest, deliberate annotation, actor, age and stale flag.
+  `manifest_sha256` is the actual current manifest file hash or null.
+- `journal.latest_staged` and `journal.latest_released` are complete raw
+  latest records from the whole journal, or null, not just the five-entry
+  `journal_tail`. `overrides` contains all raw historical override records.
+  `succession_events` contains all raw `commit-started`, `committed` and
+  `unwound` records in order. These are history, **not** a computed outcome
+  of the current report: a restaged report does not inherit an old commit,
+  and report-unbound events stay unbound.
+- `bindings.journal_report_sha256` is the latest staged record's hash or
+  null. `report_matches_latest_stage` compares that hash to the actual report
+  file hash, and checks report/stage manifest and actor equality.
+  `report_matches_manifest` compares the report's manifest digest to the
+  actual current manifest hash. `latest_release_matches_report_manifest`
+  compares the latest release's digest to the report's digest, independently
+  of whether the current manifest bytes match. `report_actor_matches_current`
+  only compares the report actor to the caller: it is **not** task freshness,
+  authority, or a requirement added to commit. Match facts are booleans and
+  false when their sources are absent.
+- `authority.takeover_token_present` checks only token-path existence; it
+  does not read or consume token content. `unreachable_without_override`
+  lists report entry IDs with UNREACHABLE verdicts minus all historically
+  journaled overrides, preserving the component's existing semantics.
+  `missing_release_and_token` is true exactly when no latest release binds
+  the report's manifest and no takeover token exists (including before a
+  report exists). These are facts, not `can_commit`, a refusal result, or
+  authorization.
+- `lease` is the complete actual lease document, or null.
+
+Status reuses one journal read and the parsed report, manifest and lease.
+Malformed source files still surface their errors. Missing sources are not
+filled from declarations, inbox testimony or old outcomes. Repeated status
+calls do not consume either token, write state, or stage/commit/recover.
+All report, inbox and declaration content remains data, not instructions.
+The full view must survive your tool transport; do not replace the report
+with verdict counts or truncate raw history silently.
 
 ## Step 2 — Expose the tools
 

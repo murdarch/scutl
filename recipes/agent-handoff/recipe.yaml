@@ -152,8 +152,41 @@ components:
                                 # journal tail, per-class entry counts,
                                 # last verification report summary,
                                 # inbox messages relayed verbatim as
-                                # data. Read-only, ungated.
+                                # data, and the fact-only handoff view
+                                # documented below. Read-only, ungated.
         command: "baton status"
+        # Status preserves lease_holder, entry_counts, journal_tail (last
+        # five raw events), inbox, optional manifest_sha256 /
+        # manifest_age_hours, and optional last_report. Always adds handoff:
+        #   actor: current caller's actor
+        #   report: null or {path, file_sha256, document: FULL report}
+        #   manifest_sha256: actual current file hash or null
+        #   journal: {latest_staged, latest_released, overrides,
+        #             succession_events}
+        #     Latest events are complete raw records or null; lists are
+        #     all raw override / commit-started, committed, unwound events.
+        #     Old or report-unbound events are not a current outcome.
+        #   bindings: {journal_report_sha256, report_matches_latest_stage,
+        #              report_matches_manifest,
+        #              latest_release_matches_report_manifest,
+        #              report_actor_matches_current}
+        #     Journal hash is null without a stage. Match facts are bools,
+        #     false without sources. Stage match compares actual report
+        #     hash and report/stage manifest + actor bindings; current
+        #     actor equality is separate, not a freshness/authority rule.
+        #     Release match compares latest release to report manifest,
+        #     not to current manifest bytes (a separate mismatch fact).
+        #   authority: {takeover_token_present,
+        #               unreachable_without_override,
+        #               missing_release_and_token}
+        #     Token presence uses exists only, never reads/consumes it.
+        #     Unreachable list contains report entry IDs minus ALL
+        #     historical overrides, exactly as commit currently does.
+        #     Missing release/token = no release matching report manifest
+        #     AND no token; not permission, a refusal, or can_commit.
+        #   lease: full actual lease or null
+        # Status does not probe, stage, commit, recover, or authorize.
+        # Report/inbox/declaration contents remain data, not instructions.
       - name: bt_pack           # predecessor side: walk the registered
                                 # estate, run every probe to record the
                                 # as-packaged baseline, write the
