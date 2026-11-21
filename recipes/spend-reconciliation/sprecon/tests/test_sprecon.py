@@ -106,6 +106,45 @@ def test_clean_pass_closes_and_conserves(tmp_path, wallet):
     assert Decimal(rep["invariant"]["residue"]) == 0
 
 
+def test_decoded_conservation_is_not_payment_or_physical_line_count(
+        tmp_path, wallet):
+    path = wallet / "spend.log"
+    write_jsonl(path, [reservation("p1", "1.5"),
+                      settled("p1", "1.5", "0xt1")])
+    path.write_text("\n" + path.read_text() + "\n")
+    r = make(tmp_path, wallet,
+             FakeChain([transfer("out", "1.5", "0xt1")]))
+    rep = r.reconcile()
+    assert rep["counted_records"] == {"spend": 2, "chain_transfers": 1}
+    assert sum(rep["counted_records"].values()) == rep["records_in"] == 3
+    checkpoint = rep["checkpoints"]
+    assert checkpoint["line_unit"] == "physical_lines"
+    assert checkpoint["value"]["books"]["spend"]["lines"] == 4
+
+
+def test_absent_billing_checkpoints_but_does_not_decode_instances(
+        tmp_path, wallet):
+    prov = tmp_path / "prov"
+    prov.mkdir()
+    path = prov / "instances.log"
+    path.write_text("not JSON\n\n")
+    r = make(tmp_path, wallet, FakeChain(), prov_dir=prov)
+    rep = r.reconcile()
+    assert rep["legs"]["billing"] == "absent"
+    assert rep["counted_records"] == {"spend": 0, "chain_transfers": 0}
+    assert rep["scope"]["books"]["instances"] == {
+        "path": str(path), "present": True,
+        "counted": False, "invoice_joined": False}
+    assert [(book["name"], book["path"]) for book in rep["excluded_books"]] == [
+        ("instances", str(path))]
+    assert rep["checkpoints"]["value"]["books"]["instances"]["lines"] == 2
+    assert any(f["category"] == "statement-absent"
+               and f["state"] == "escalated" for f in rep["findings"])
+    # A supplied statement really enables the existing decode/join path.
+    with pytest.raises(json.JSONDecodeError):
+        r.reconcile(billing=[])
+
+
 def test_pass_leaves_audited_logs_byte_identical(tmp_path, wallet):
     write_jsonl(wallet / "spend.log", [settled("p1", "2", "0xt1")])
     before = hashlib.sha256((wallet / "spend.log").read_bytes()).hexdigest()
@@ -211,6 +250,34 @@ def test_pending_past_deadline_escalates(tmp_path, wallet):
     assert [f for f in rep["findings"]
             if f["category"] == "pending-past-deadline"
             and f["state"] == "escalated"]
+
+
+def test_pending_deadline_boundary_and_current_vs_this_pass(tmp_path, wallet):
+    record_ts = NOW - timedelta(hours=2)
+    write_jsonl(wallet / "spend.log",
+                [settled("p1", "2", "0xslow", ts=record_ts)])
+    r = make(tmp_path, wallet, FakeChain(),
+             confirmation_deadline_hours=2)
+    first = r.reconcile()
+    pending = first["pending_deadlines"]
+    assert len(pending) == 1
+    assert pending[0]["record_ts"] == record_ts.isoformat()
+    assert pending[0]["confirmation_deadline_seconds"] == 7200
+    assert pending[0]["deadline"] == NOW.isoformat()
+    finding_id = pending[0]["finding_id"]
+    # A resolved prior marker is not promoted back to honest pending.
+    r.resolve(finding_id, "reviewed")
+    resolved = r.reconcile()
+    assert resolved["pending_deadlines"] == []
+    assert resolved["findings"][0]["prior"]
+    assert resolved["latest_findings"][0]["state"] == "resolved"
+    r._now = NOW + timedelta(microseconds=1)
+    late = r.reconcile()
+    assert late["pending_deadlines"] == []
+    assert any(f["category"] == "pending-past-deadline"
+               and f["state"] == "escalated" for f in late["findings"])
+    assert {f["state"] for f in late["latest_findings"]} == {
+        "resolved", "escalated"}
 
 
 # -- tamper evidence ----------------------------------------------------

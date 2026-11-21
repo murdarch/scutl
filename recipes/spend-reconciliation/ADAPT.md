@@ -141,6 +141,44 @@ the read-only books, and the token gates all hold in the component's
 own code either way. Say so in your report rather than inventing a
 wrapper.
 
+### Completed-pass output
+
+`sprecon reconcile` emits one completed-pass JSON envelope, without an
+additional state file or command. Existing conservation, legs, invariant,
+`findings`, and `open_escalations` retain their meanings; arithmetic
+explained by findings is not a clean disposition.
+
+- `as_of` is this pass's decision time; `block_window` names its
+  `from_block` and `through_block`. Counted `chain_transfers` also include
+  carried unmatched transfers, not just discoveries in that window.
+- `anchor` is the baseline finding used for the invariant, or null.
+- `scope` gives the public `wallet_address`, `billing_statement_supplied`,
+  and configured `books` with `path`, `present`, `counted`, and
+  `invoice_joined`. Missing files may count as zero decoded records;
+  presence alone does not establish an invoice join.
+- `counted_records` gives decoded population sizes: `spend`,
+  `chain_transfers`, and the earnings/refunds and instances/billing
+  populations actually included. Their sum is `records_in`. Spend counts
+  all decoded records, not latest-per-payment states. Instances are
+  counted/joined only with a supplied statement and configured provision
+  books; `excluded_books` names uncounted books, their paths and reasons.
+  Without billing, instances are checkpointed but not JSON-decoded.
+- `checkpoints` contains `line_unit: "physical_lines"` and the saved
+  checkpoint `value`. Physical lines include blanks and are not decoded
+  row counts or latest payment counts.
+- `findings` describes this pass, including genuine `prior` markers;
+  `latest_findings` is the current latest-per-logical-id fold, excluding
+  baselines, including resolved and escalated states. It is not the
+  literal `findings --state open` filter (`open` is not `escalated`).
+- `pending_deadlines` lists only this pass's explained `pending-tx`
+  findings still inside the effective deadline. Each entry gives
+  `finding_id`, `payment_id`, `tx`, `record_ts`,
+  `confirmation_deadline_seconds`, and `deadline`. The deadline is the
+  evidence record timestamp plus the configured duration, not the finding
+  timestamp or the time the report is read. Resolved historical findings
+  and past-deadline escalations are not honest pending entries.
+
+
 ## Step 3 — Carry the guardrails into system context
 
 Copy `execute.guardrails` and the `execute.loop` description from

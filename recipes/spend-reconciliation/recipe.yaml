@@ -20,6 +20,17 @@
 # entire attack surface collapses to "lying in the report", which is
 # exactly what the bench grades. The trust story for every other recipe
 # in the catalog is that this one cannot be sweet-talked into balance.
+#
+# Completed reconcile output retains conservation/legs/invariant and this-pass
+# findings (including prior markers), adding as_of, block_window, anchor,
+# scope, counted_records, excluded_books, checkpoints, latest_findings and
+# pending_deadlines. Counts are decoded rows (all spend rows, not payment
+# states); checkpoints.value counts physical_lines including blanks. Chain
+# counts include carried unmatched transfers outside the new block window.
+# Configured instances are not decoded/counted/joined without billing.
+# latest_findings is the current fold, not this-pass or state=open findings;
+# pending deadlines use evidence.record.ts plus the effective configured
+# duration, never finding/report time. Explained arithmetic is not clean.
 
 recipe:
   id: sprc

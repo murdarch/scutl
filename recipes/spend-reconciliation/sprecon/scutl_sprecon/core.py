@@ -280,6 +280,7 @@ class Reconciler:
         # supersedes any reservation (re-auth re-signs the same nonce).
         spends = _read_jsonl(books["spend"])
         records_in += len(spends)
+        counted_records = {"spend": len(spends)}
         latest: dict[str, dict] = {}
         for rec in spends:
             cur = latest.get(rec["payment_id"])
@@ -295,6 +296,7 @@ class Reconciler:
         for t in transfers:
             t["amount"] = Decimal(str(t["amount"]))
         records_in += len(transfers)
+        counted_records["chain_transfers"] = len(transfers)
         unmatched = {(t["tx"], t["direction"]): t for t in transfers}
 
         categorized = 0
@@ -368,6 +370,7 @@ class Reconciler:
                 continue
             recs = _read_jsonl(books[name])
             records_in += len(recs)
+            counted_records[name] = len(recs)
             categorized += len(recs)
             for rec in recs:
                 amt = Decimal(rec["amount"])
@@ -412,6 +415,8 @@ class Reconciler:
             billing_leg = "present"
             events = _read_jsonl(books["instances"])
             records_in += len(events) + len(billing)
+            counted_records["instances"] = len(events)
+            counted_records["billing"] = len(billing)
             categorized += len(events) + len(billing)
             created = {e["id"]: e for e in events
                        if e.get("event") == "created"}
@@ -527,6 +532,23 @@ class Reconciler:
                             "an audited log changed during the pass")
 
         escalations = [f for f in report_findings if f["state"] == ESCALATE]
+        invoice_joined = billing is not None and self.prov_dir is not None
+        pending_deadlines = []
+        for f in report_findings:
+            if f["category"] != "pending-tx" or f["state"] != EXPLAINED:
+                continue
+            rec = f["evidence"]["record"]
+            deadline = datetime.fromisoformat(rec["ts"]) + self.deadline
+            if deadline < now:
+                continue
+            pending_deadlines.append({
+                "finding_id": f.get("supersedes", f["id"]),
+                "payment_id": rec["payment_id"],
+                "tx": rec["tx"],
+                "record_ts": rec["ts"],
+                "confirmation_deadline_seconds": self.deadline.total_seconds(),
+                "deadline": deadline.isoformat(),
+            })
         return {
             "records_in": records_in,
             "records_categorized": categorized,
@@ -536,4 +558,26 @@ class Reconciler:
             "invariant": invariant,
             "findings": report_findings,
             "open_escalations": len(escalations),
+            "as_of": now.isoformat(),
+            "block_window": {"from_block": from_block, "through_block": head},
+            "anchor": baseline,
+            "scope": {
+                "wallet_address": address,
+                "billing_statement_supplied": billing is not None,
+                "books": {
+                    name: {"path": str(path), "present": path.exists(),
+                           "counted": name in counted_records,
+                           "invoice_joined": name == "instances"
+                           and invoice_joined}
+                    for name, path in books.items()},
+            },
+            "counted_records": counted_records,
+            "excluded_books": [
+                {"name": name, "path": str(path),
+                 "reason": "billing statement not supplied"}
+                for name, path in books.items()
+                if name not in counted_records],
+            "checkpoints": {"line_unit": "physical_lines", "value": cp},
+            "latest_findings": self.findings(),
+            "pending_deadlines": pending_deadlines,
         }
