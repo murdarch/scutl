@@ -61,18 +61,38 @@ def main(argv: list[str] | None = None) -> int:
                    help="who acts (lease holder / journal 'by'; "
                         "default: $SCUTL_BATON_ACTOR or 'agent')")
     p.add_argument("op", choices=["status", "pack", "release", "stage",
-                                  "commit", "recover", "override"])
+                                  "commit", "recover", "override",
+                                  "report-template", "report"])
     p.add_argument("arg1", nargs="?", default=None,
                    help="stage: the out-of-band manifest sha256; "
                         "override: the entry id")
     p.add_argument("arg2", nargs="?", default=None,
                    help="override only: the journaled reason")
+    p.add_argument("--manifest-sha256", default=None)
+    p.add_argument("--stage-report-sha256", default=None)
+    p.add_argument("--slots", default=None)
+    p.add_argument("--out", default=None)
     try:
         a = p.parse_args(argv)
     except SystemExit:
         return 1
     baton = Baton(_state(a.state), actor=a.actor)
     try:
+        if a.op in ("report-template", "report"):
+            if a.arg1 is not None or a.arg2 is not None or not a.out:
+                return _refuse("invalid", 1, "presentation requires --out and no positional arguments")
+            try:
+                if a.op == "report-template":
+                    if not a.manifest_sha256 or not a.stage_report_sha256 or a.slots:
+                        raise ValueError("report-template requires --manifest-sha256 and --stage-report-sha256")
+                    return _emit(baton.report_template(
+                        a.manifest_sha256, a.stage_report_sha256, a.out))
+                if not a.slots or a.manifest_sha256 or a.stage_report_sha256:
+                    raise ValueError("report requires --slots, with bindings retained in that input")
+                return _emit(baton.report(a.slots, a.out))
+            except (OSError, ValueError, TypeError, KeyError, IndexError,
+                    RecursionError) as error:
+                return _refuse("invalid", 1, str(error))
         if a.op == "status":
             return _emit(baton.status())
         if a.op == "pack":

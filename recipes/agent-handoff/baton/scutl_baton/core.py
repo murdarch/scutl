@@ -45,6 +45,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -317,6 +318,103 @@ class Baton:
                 "manifest_sha256": report["manifest_sha256"],
                 "verdicts": verdicts}
         return out
+
+    # -- presentation (never an authority or succession action) ------------
+    def _report_context(self, manifest_sha256: str, stage_report_sha256: str):
+        from .reporting import template
+
+        status = self.status()  # Exactly one existing status read per operation.
+        handoff = status["handoff"]
+        report = handoff["report"]
+        if (handoff["manifest_sha256"] != manifest_sha256 or not report
+                or report["file_sha256"] != stage_report_sha256
+                or not handoff["bindings"]["report_matches_latest_stage"]
+                or not handoff["bindings"]["report_matches_manifest"]
+                or report["document"]["staged_by"] != self.actor):
+            raise DigestMismatch(
+                "presentation requires the current manifest and exact latest "
+                "stage report, staged by the invoking actor")
+        # Status deliberately exposes no new fields. Bind this membership
+        # read to the manifest bytes already observed by that status call.
+        manifest_blob = self.manifest_path.read_bytes()
+        if _sha256_bytes(manifest_blob) != handoff["manifest_sha256"]:
+            raise DigestMismatch("manifest changed during presentation read")
+        manifest = json.loads(manifest_blob)
+        registered = manifest["entries"]
+        rows = report["document"]["entries"]
+        manifest_ids = [entry["id"] for entry in registered]
+        report_ids = [row["id"] for row in rows]
+        if (not all(isinstance(key, str) for key in manifest_ids + report_ids)
+                or len(set(manifest_ids)) != len(manifest_ids)
+                or len(set(report_ids)) != len(report_ids)
+                or set(manifest_ids) != set(report_ids)):
+            raise DigestMismatch("manifest/report entry coverage must be exact and unique")
+        facts = {"handoff": handoff, "journal_tail": status["journal_tail"]}
+        binding = {"manifest_sha256": manifest_sha256,
+                   "stage_report_sha256": stage_report_sha256,
+                   "actor": self.actor}
+        return template(facts, binding), registered
+
+    def _presentation_target(self, out, registered, slots=None):
+        target = Path(out).expanduser()
+        resolved = target.resolve()
+        state = self.dir.resolve()
+        if (resolved == state or state in resolved.parents
+                or target.absolute() == self.dir.absolute()
+                or self.dir.absolute() in target.absolute().parents):
+            raise ValueError("presentation output must be outside Baton state")
+        sources = [path for path in self.dir.rglob("*") if path.is_file()]
+        for entry in registered:
+            probe = entry.get("probe", {})
+            if probe.get("kind") == "file":
+                sources.append(Path(probe["path"]).expanduser())
+            elif probe.get("kind") == "command" and probe.get("argv"):
+                executable = probe["argv"][0]
+                located = shutil.which(executable)
+                if located is not None or "/" in executable:
+                    sources.append(Path(located or executable))
+        if slots is not None:
+            sources.append(Path(slots).expanduser())
+        for source in sources:
+            if (resolved == source.resolve()
+                    or (target.exists() and source.exists()
+                        and target.samefile(source))):
+                raise ValueError("presentation output aliases a source or slots input")
+        return target
+
+    @staticmethod
+    def _write_presentation(target, blob, evidence_sha256):
+        target.write_bytes(blob)
+        return {"path": str(target), "sha256": _sha256_bytes(blob),
+                "evidence_sha256": evidence_sha256}
+
+    def report_template(self, manifest_sha256: str, stage_report_sha256: str,
+                        out: str | Path) -> dict:
+        from .reporting import canonical
+
+        document, registered = self._report_context(
+            manifest_sha256, stage_report_sha256)
+        target = self._presentation_target(out, registered)
+        return self._write_presentation(
+            target, canonical(document), document["evidence_sha256"])
+
+    def report(self, slots: str | Path, out: str | Path) -> dict:
+        from .reporting import load_slots, markdown, validate_slots
+
+        slots = Path(slots).expanduser()
+        document = load_slots(slots.read_bytes())
+        try:
+            binding = document["binding"]
+            expected, registered = self._report_context(
+                binding["manifest_sha256"], binding["stage_report_sha256"])
+            validate_slots(document, expected)
+        except (KeyError, TypeError, IndexError) as error:
+            raise ValueError("invalid report slots shape") from error
+        target = self._presentation_target(out, registered, slots=slots)
+        # Complete validation and rendering before touching a prior output.
+        blob = markdown(expected, self.manifest_path)
+        return self._write_presentation(
+            target, blob, expected["evidence_sha256"])
 
     # -- bt_pack -----------------------------------------------------------
     def pack(self) -> dict:

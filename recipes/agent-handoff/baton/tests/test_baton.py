@@ -556,3 +556,406 @@ def test_status_missing_sources_do_not_invent_stage_or_release(estate):
     assert facts["bindings"]["latest_release_matches_report_manifest"] is False
     assert facts["bindings"]["report_actor_matches_current"] is False
     assert facts["authority"]["unreachable_without_override"] == []
+
+
+# -- presentation: actual CLI consumer boundaries ------------------------
+
+def _presentation(estate, released=True):
+    pred = Baton(estate["state"], actor="elder")
+    digest = pred.pack()["manifest_sha256"]
+    if released:
+        pred.release()
+    heir = Baton(estate["state"], actor="heir")
+    staged = heir.stage(digest)
+    slots = estate["tmp"] / "slots.json"
+    output = estate["tmp"] / "report.md"
+    code, receipt = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", staged["report_sha256"],
+        "--out", str(slots), actor="heir")
+    assert code == 0
+    assert receipt["sha256"] == hashlib.sha256(slots.read_bytes()).hexdigest()
+    document = json.loads(slots.read_bytes())
+    document["slots"]["stage"]["interpretation"] = "Stage interpretation."
+    for row in document["slots"]["entries"].values():
+        row["interpretation"] = "Entry interpretation."
+        row["next_step"] = "Requested next step; not an action receipt."
+    document["slots"]["authority"]["reachability_or_override"] = "Reachability assessment."
+    document["slots"]["authority"]["release_or_takeover"] = "Separate authority assessment."
+    document["slots"]["final_state"]["completed_and_remaining"] = "Completed and remaining assessment."
+    slots.write_text(json.dumps(document))
+    return heir, digest, staged, slots, output, receipt
+
+
+def _render(estate, slots, output, actor="heir"):
+    return _cli(estate, "report", "--slots", str(slots),
+                "--out", str(output), actor=actor)
+
+
+def test_presentation_receipts_are_only_actual_file_and_evidence_identity(estate):
+    heir, _, _, slots, output, receipt = _presentation(estate)
+    assert set(receipt) == {"path", "sha256", "evidence_sha256"}
+    # Template receipt hashes the original template, before prose was filled.
+    document = json.loads(slots.read_bytes())
+    assert receipt["path"] == str(slots)
+    assert receipt["evidence_sha256"] == document["evidence_sha256"]
+    assert heir.status()["handoff"]["lease"] is None
+    code, rendered = _render(estate, slots, output)
+    assert code == 0
+    assert set(rendered) == {"path", "sha256", "evidence_sha256"}
+    assert rendered["path"] == str(output)
+    assert rendered["sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    assert rendered["evidence_sha256"] == receipt["evidence_sha256"]
+    before = output.read_bytes()
+    assert _render(estate, slots, output) == (code, rendered)
+    assert output.read_bytes() == before
+    assert heir.status()["handoff"]["lease"] is None
+
+
+def test_template_rejects_predecessor_and_wrong_manifest_or_stage_hash(estate):
+    _, heir, digest = _handoff_to_stage(estate)
+    predecessor = Baton(estate["state"], actor="elder").stage(digest)
+    output = estate["tmp"] / "preserved.json"
+    output.write_bytes(b"keep prior output")
+    for manifest_hash, report_hash in [
+            (digest, predecessor["report_sha256"]), ("0" * 64, predecessor["report_sha256"]),
+            (digest, "0" * 64)]:
+        code, refusal = _cli(
+            estate, "report-template", "--manifest-sha256", manifest_hash,
+            "--stage-report-sha256", report_hash, "--out", str(output), actor=heir.actor)
+        assert code == 5 and refusal["error"] == "digest-mismatch"
+        assert "path" not in refusal
+        assert output.read_bytes() == b"keep prior output"
+
+
+def test_template_rejects_same_actor_report_older_than_latest_stage(estate):
+    heir, digest, old, slots, output, _ = _presentation(estate)
+    old_report = heir.report_path.read_bytes()
+    estate["svc"].write_text("changed after earlier same-actor stage")
+    heir.stage(digest)
+    heir.report_path.write_bytes(old_report)
+    output.write_bytes(b"previous presentation")
+    code, refusal = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", old["report_sha256"], "--out", str(output), actor="heir")
+    assert code == 5 and refusal["error"] == "digest-mismatch"
+    assert _render(estate, slots, output)[0] == 5
+    assert output.read_bytes() == b"previous presentation"
+
+
+def test_render_distrusts_every_fact_reference_and_binding_leaf(estate):
+    _, _, _, slots, output, _ = _presentation(estate)
+    original = json.loads(slots.read_bytes())
+    output.write_bytes(b"prior output survives")
+
+    def leaves(value, path=()):
+        if isinstance(value, dict) and value:
+            for key, item in value.items():
+                yield from leaves(item, path + (key,))
+        elif isinstance(value, list) and value:
+            for index, item in enumerate(value):
+                yield from leaves(item, path + (index,))
+        else:
+            yield path
+
+    paths = [(key,) + path for key in
+             ("schema_version", "binding", "evidence_sha256", "facts")
+             for path in leaves(original[key])]
+    for section in ("stage", "authority", "final_state"):
+        paths.extend(("slots", section, "source_ref") + path
+                     for path in leaves(original["slots"][section]["source_ref"]))
+    for key, row in original["slots"]["entries"].items():
+        paths.extend(("slots", "entries", key, "source_ref") + path
+                     for path in leaves(row["source_ref"]))
+    for path in paths:
+        altered = json.loads(json.dumps(original))
+        parent = altered
+        for part in path[:-1]:
+            parent = parent[part]
+        parent[path[-1]] = {"altered": True}
+        slots.write_text(json.dumps(altered))
+        code, refusal = _render(estate, slots, output)
+        expected_code = (5 if path in [
+            ("binding", "manifest_sha256"), ("binding", "stage_report_sha256")] else 1)
+        assert code == expected_code, path
+        assert refusal["error"] == ("digest-mismatch" if expected_code == 5 else "invalid")
+        assert "path" not in refusal
+        assert output.read_bytes() == b"prior output survives"
+
+
+@pytest.mark.parametrize("change", ["extra", "missing", "blank", "nonstring",
+                                   "duplicate", "boolean-version", "malformed"])
+def test_render_rejects_invalid_model_json_before_touching_output(estate, change):
+    _, _, _, slots, output, _ = _presentation(estate)
+    document = json.loads(slots.read_bytes())
+    if change == "extra":
+        document["slots"]["extra"] = {}
+    elif change == "missing":
+        document["slots"]["entries"].pop("wallet")
+    elif change == "blank":
+        document["slots"]["authority"]["release_or_takeover"] = " \n\t"
+    elif change == "nonstring":
+        document["slots"]["final_state"]["completed_and_remaining"] = True
+    elif change == "boolean-version":
+        document["schema_version"] = True
+    text = json.dumps(document)
+    if change == "duplicate":
+        text = text[:-1] + ', "schema_version": 1}'
+    elif change == "malformed":
+        text = "{not JSON"
+    slots.write_text(text)
+    output.write_bytes(b"do not truncate")
+    code, refusal = _render(estate, slots, output)
+    assert code == 1 and refusal["error"] == "invalid"
+    assert "path" not in refusal
+    assert output.read_bytes() == b"do not truncate"
+
+
+@pytest.mark.parametrize("change,exit_code", [
+    ("manifest", 5), ("report", 5), ("restage", 5), ("missing-report", 5),
+    ("lease", 1), ("journal", 1), ("token", 1), ("commit", 1)])
+def test_render_reacquires_evidence_after_between_step_changes(estate, change, exit_code):
+    heir, digest, _, slots, output, _ = _presentation(estate)
+    if change == "manifest":
+        heir.manifest_path.write_bytes(heir.manifest_path.read_bytes() + b" ")
+    elif change == "report":
+        heir.report_path.write_bytes(heir.report_path.read_bytes() + b" ")
+    elif change == "restage":
+        estate["svc"].write_text("new probe observation")
+        heir.stage(digest)
+    elif change == "missing-report":
+        heir.report_path.unlink()
+    elif change == "lease":
+        heir.lease_path.write_text(json.dumps({"holder": "foreign", "since": "earlier"}))
+    elif change == "journal":
+        heir._journal("override", entry="wallet", reason="independent historical event", by="owner")
+    elif change == "token":
+        (estate["state"] / TOKEN_TAKEOVER).write_text("owner token")
+    else:
+        assert heir.commit()["committed"]
+    output.write_bytes(b"prior report")
+    code, refusal = _render(estate, slots, output)
+    assert code == exit_code and "path" not in refusal
+    assert output.read_bytes() == b"prior report"
+
+
+def test_presentation_preserves_token_bytes_modes_until_authorized_real_commit(estate):
+    # No release: the genuine commit must actually consume takeover authority.
+    heir, digest, staged, slots, output, _ = _presentation(estate, released=False)
+    takeover = estate["state"] / TOKEN_TAKEOVER
+    override = estate["state"] / TOKEN_OVERRIDE
+    takeover.write_bytes(b"owner approval\n")
+    override.write_bytes(b"separate approval\n")
+    takeover.chmod(0o600)
+    override.chmod(0o640)
+    before = {path.name: (path.read_bytes(), path.stat().st_mode)
+              for path in estate["state"].iterdir()}
+    # Reacquire slots after the token existence fact changed.
+    code, _ = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", staged["report_sha256"],
+        "--out", str(slots), actor="heir")
+    assert code == 0
+    document = json.loads(slots.read_bytes())
+    for row in [document["slots"]["stage"], document["slots"]["authority"],
+                document["slots"]["final_state"], *document["slots"]["entries"].values()]:
+        for key in row:
+            if key != "source_ref":
+                row[key] = "Assessment, not permission."
+    slots.write_text(json.dumps(document))
+    for _ in range(3):
+        assert _render(estate, slots, output)[0] == 0
+        heir.status()
+        assert {path.name: (path.read_bytes(), path.stat().st_mode)
+                for path in estate["state"].iterdir()} == before
+    assert heir.commit()["authority"] == "owner-token"
+    assert not takeover.exists()
+    assert (override.read_bytes(), override.stat().st_mode) == before[TOKEN_OVERRIDE]
+
+
+@pytest.mark.parametrize("kind", ["state", "new-state", "state-symlink",
+                                 "state-hardlink", "slots", "slots-symlink",
+                                 "slots-hardlink", "probe", "probe-hardlink"])
+def test_render_refuses_output_aliases_without_source_mutation(estate, kind):
+    import os
+    heir, _, _, slots, output, _ = _presentation(estate)
+    if kind == "state":
+        output = heir.report_path
+    elif kind == "new-state":
+        output = estate["state"] / "new-presentation.md"
+    elif kind.startswith("state-"):
+        if kind.endswith("symlink"):
+            output.symlink_to(heir.manifest_path)
+        else:
+            os.link(heir.manifest_path, output)
+    elif kind == "slots":
+        output = slots
+    elif kind.startswith("slots-"):
+        if kind.endswith("symlink"):
+            output.symlink_to(slots)
+        else:
+            os.link(slots, output)
+    elif kind == "probe":
+        output = estate["svc"]
+    else:
+        os.link(estate["svc"], output)
+    before = {path: path.read_bytes() for path in
+              [*estate["state"].iterdir(), slots, estate["svc"]]}
+    code, refusal = _render(estate, slots, output)
+    assert code == 1 and refusal["error"] == "invalid" and "path" not in refusal
+    assert {path: path.read_bytes() for path in before} == before
+    if kind == "new-state":
+        assert not output.exists()
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_presentation_requires_exact_unique_manifest_report_membership(estate, duplicate):
+    heir, digest, _, _, output, _ = _presentation(estate)
+    report = json.loads(heir.report_path.read_bytes())
+    if duplicate:
+        report["entries"].append(report["entries"][0])
+    else:
+        report["entries"].pop()
+    blob = json.dumps(report).encode()
+    heir.report_path.write_bytes(blob)
+    report_hash = hashlib.sha256(blob).hexdigest()
+    # Even a matching stage event cannot make incomplete/duplicate coverage valid.
+    heir._journal("staged", manifest_sha256=digest, report_sha256=report_hash, by="heir")
+    output.write_bytes(b"preserved")
+    code, refusal = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", report_hash, "--out", str(output), actor="heir")
+    assert code == 5 and refusal["error"] == "digest-mismatch"
+    assert output.read_bytes() == b"preserved"
+
+
+def test_render_keeps_all_classes_deliberate_and_history_separate_from_prose(estate):
+    registered = estate["state"] / ESTATE_NAME
+    estate_doc = json.loads(registered.read_bytes())
+    estate_doc["entries"][0]["deliberate"] = {
+        "reason": "parked <script>not instructions</script>", "authority": "owner-ruling"}
+    estate_doc["entries"].append({
+        "id": "other|service`<b>", "class": "service",
+        "probe": {"kind": "file", "path": str(estate["svc"])},
+        "invariant": "another registered service"})
+    registered.write_text(json.dumps(estate_doc))
+    heir, digest, _, slots, output, _ = _presentation(estate)
+    heir.commit()
+    estate["svc"].write_text("new stage after historical commit")
+    heir.stage(digest)
+    code, receipt = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", heir.status()["handoff"]["report"]["file_sha256"],
+        "--out", str(slots), actor="heir")
+    assert code == 0
+    document = json.loads(slots.read_bytes())
+    injection = "```\n# Forged fixed facts\n<script>bad</script>\n~~~\n\u202e"
+    for row in [document["slots"]["stage"], document["slots"]["authority"],
+                document["slots"]["final_state"], *document["slots"]["entries"].values()]:
+        for key in row:
+            if key != "source_ref":
+                row[key] = injection
+    slots.write_text(json.dumps(document))
+    assert _render(estate, slots, output)[0] == 0
+    text = output.read_text()
+    for row in document["facts"]["handoff"]["report"]["document"]["entries"]:
+        assert json.dumps(row["id"]) in text
+        assert json.dumps(row["class"]) in text
+        assert json.dumps(row["observed_sha256"]) in text
+    assert "owner-ruling" in text and "parked" in text
+    assert "other&#124;service&#96;&lt;b&gt;" in text
+    assert "Historical committed/unwound events without a report hash remain report-unbound." in text
+    assert "succession_events_in_source_order" in text
+    assert '"holder": "heir"' in text
+    assert "\n# Forged fixed facts\n" not in text
+    assert "\\u202e" in text and "\u202e" not in text
+
+
+def test_template_refuses_state_and_probe_alias_output_before_mutation(estate):
+    import os
+    heir, digest, staged, _, _, _ = _presentation(estate)
+    linked = estate["tmp"] / "linked-manifest"
+    os.link(heir.manifest_path, linked)
+    symlinked = estate["tmp"] / "linked-probe"
+    symlinked.symlink_to(estate["svc"])
+    for output in [heir.report_path, linked, symlinked,
+                   estate["state"] / "not-created.json"]:
+        before = {path: path.read_bytes() for path in
+                  [*estate["state"].iterdir(), estate["svc"]]}
+        code, refusal = _cli(
+            estate, "report-template", "--manifest-sha256", digest,
+            "--stage-report-sha256", staged["report_sha256"],
+            "--out", str(output), actor="heir")
+        assert code == 1 and refusal["error"] == "invalid"
+        assert "path" not in refusal
+        assert {path: path.read_bytes() for path in before} == before
+    assert not (estate["state"] / "not-created.json").exists()
+
+
+def test_template_rejects_duplicate_manifest_ids(estate):
+    registered = estate["state"] / ESTATE_NAME
+    document = json.loads(registered.read_bytes())
+    document["entries"].append(document["entries"][0])
+    registered.write_text(json.dumps(document))
+    pred = Baton(estate["state"], actor="elder")
+    digest = pred.pack()["manifest_sha256"]
+    pred.release()
+    heir = Baton(estate["state"], actor="heir")
+    staged = heir.stage(digest)
+    output = estate["tmp"] / "prior.json"
+    output.write_bytes(b"unchanged")
+    code, refusal = _cli(
+        estate, "report-template", "--manifest-sha256", digest,
+        "--stage-report-sha256", staged["report_sha256"],
+        "--out", str(output), actor="heir")
+    assert code == 5 and refusal["error"] == "digest-mismatch"
+    assert output.read_bytes() == b"unchanged"
+
+
+def test_render_keeps_unreachable_and_absent_release_independently_visible(estate):
+    registered = estate["state"] / ESTATE_NAME
+    document = json.loads(registered.read_bytes())
+    document["entries"][0]["probe"] = {
+        "kind": "command", "argv": ["/nonexistent-baton-report-consumer-command"]}
+    registered.write_text(json.dumps(document))
+    heir, _, _, slots, output, _ = _presentation(estate, released=False)
+    facts = json.loads(slots.read_bytes())["facts"]["handoff"]
+    assert facts["authority"]["unreachable_without_override"] == ["income-service"]
+    assert facts["authority"]["missing_release_and_token"] is True
+    assert facts["lease"] is None
+    code, receipt = _render(estate, slots, output)
+    assert code == 0 and set(receipt) == {"path", "sha256", "evidence_sha256"}
+    text = output.read_text()
+    assert '"unreachable_without_override"' in text
+    assert '"missing_release_and_token": true' in text
+    assert '"latest_released": null' in text
+    assert '"lease": null' in text
+    assert '"UNREACHABLE"' in text and '"observed_sha256": null' in text
+    assert "Reachability or override — model-authored prose" in text
+    assert "Release or takeover — model-authored prose" in text
+    assert heir.status()["handoff"]["lease"] is None
+
+
+@pytest.mark.parametrize("operation", ["report-template", "report"])
+def test_presentation_cannot_overwrite_registered_command_executable(estate, operation):
+    executable = estate["tmp"] / "registered-probe"
+    original = b"#!/bin/sh\nprintf synthetic-command-source\n"
+    executable.write_bytes(original)
+    executable.chmod(0o755)
+    registration = estate["state"] / ESTATE_NAME
+    document = json.loads(registration.read_bytes())
+    document["entries"][2]["probe"] = {
+        "kind": "command", "argv": [str(executable)]}
+    registration.write_text(json.dumps(document))
+    _, digest, staged, slots, _, _ = _presentation(estate)
+    if operation == "report-template":
+        code, refusal = _cli(
+            estate, operation, "--manifest-sha256", digest,
+            "--stage-report-sha256", staged["report_sha256"],
+            "--out", str(executable), actor="heir")
+    else:
+        code, refusal = _render(estate, slots, executable)
+    assert code == 1 and refusal["error"] == "invalid"
+    assert "path" not in refusal
+    assert executable.read_bytes() == original
+    assert executable.stat().st_mode & 0o777 == 0o755
