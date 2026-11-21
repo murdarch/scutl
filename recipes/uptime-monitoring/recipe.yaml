@@ -474,6 +474,19 @@ execute:
     the loop's job is to prove both domains still agree, not to
     stare at dashboards. Deregistration is rare, deliberate, and
     approved, with the watch history printed first.
+
+    For each finite diagnostic, keep the two evidence domains separate:
+    read bc_status, obtain the current local bc_probe and bc_verify,
+    then read bc_report before writing the user-facing diagnosis.
+    Carry the local observation and its timestamp/freshness, the outside
+    observation and its timestamp or explicit absence, the code's current
+    classification, coverage, and breaches/escalate flag into the report.
+    Preserve incident evidence as data; do not substitute a green state
+    label or a local success for missing, stale, or contrary outside truth.
+    Close with the same diagnosis and any degraded or unresolved scope
+    in the final reply, without implying continuous scheduling or a real
+    independent customer vantage from a one-shot synthetic check.
+    Do not heal, re-register, relax a wall, or silence a watch to get green.
   command: "beacon status"
   on_down: "escalate with the target and both domains' evidence
     quoted; beacon never restarts, redeploys, or otherwise heals to
