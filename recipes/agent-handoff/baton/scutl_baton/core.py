@@ -390,13 +390,13 @@ class Baton:
 
     def report_template(self, manifest_sha256: str, stage_report_sha256: str,
                         out: str | Path) -> dict:
-        from .reporting import canonical
-
         document, registered = self._report_context(
             manifest_sha256, stage_report_sha256)
         target = self._presentation_target(out, registered)
+        blob = json.dumps(
+            document, sort_keys=True, indent=2, allow_nan=False).encode("utf-8")
         return self._write_presentation(
-            target, canonical(document), document["evidence_sha256"])
+            target, blob, document["evidence_sha256"])
 
     def report(self, slots: str | Path, out: str | Path) -> dict:
         from .reporting import load_slots, markdown, validate_slots

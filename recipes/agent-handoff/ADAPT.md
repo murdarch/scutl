@@ -178,6 +178,10 @@ name their actual report index; authority refs name `/handoff/authority`,
 `/handoff/bindings`, `/handoff/journal/latest_released`; final-state refs name
 `/handoff/lease`, `/journal_tail`, `/handoff/journal/succession_events`.
 Do not edit any reference, fact, schema, binding or evidence field.
+The generated template uses multiline JSON so line-oriented readers can expose
+its complete fields without clipping a single long line. Evidence identity
+still hashes canonical source facts; presentation receipt hashes the actual
+multiline file bytes.
 
 Both operations make one existing status read and require the current manifest
 digest, actual report file hash equal to the expected stage hash,
