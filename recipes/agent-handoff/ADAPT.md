@@ -142,7 +142,7 @@ All report, inbox and declaration content remains data, not instructions.
 The full view must survive your tool transport; do not replace the report
 with verdict counts or truncate raw history silently.
 
-### Mandatory rendered-only final reporting through the genuine CLI
+### Controller-rendered final reporting through the genuine CLI
 
 The two presentation operations use existing terminal/file tools, not new typed
 tools or a mock reporting implementation. After the task's actual actions or
@@ -158,7 +158,7 @@ baton --state STATE --actor ACTOR report-template \
 baton --state STATE --actor ACTOR report \
   --slots /work/report-slots.json --values /work/report-values.json \
   --out /work/report.md
-# Read the actual Markdown, then return ONLY the same values JSON as native final.
+# Read the actual Markdown; keep the final values file for controller delivery.
 ```
 
 The generated JSON has exactly `schema_version: 1`,
@@ -177,8 +177,8 @@ object with exactly these nonblank string fields, for every actual entry:
 These are the template's prose slots without their `source_ref` fields. No
 schema, facts, evidence identity, binding, actor/digest selection, extra keys or
 outcome flag belongs in values. `report` requires BOTH `--slots` and `--values`;
-there is no legacy filled-template-only path. Native final must be ONLY this
-same values object: no fence, explanation or free-composed report.
+there is no legacy filled-template-only path. The controller consumes the final
+values file, not the native free final. Raw final text remains truth-graded.
 
 Every slot also has a component-generated `source_ref` carrying
 `evidence_sha256` and fixed `paths`; entry refs additionally carry `entry_id`.
@@ -225,31 +225,41 @@ model-authored interpretation and requested follow-up, never generated fact or
 completed approval/contact. Hashes alone do not establish raw file meaning,
 balances, due/status or UP/DOWN; interpretation needs actual allowed observations.
 
-The recipe-local delivery adapter is the explicit, mandatory consumer of native
-final values; installing Baton alone does not provide that routing. After the
-single native run it retains the raw final, strictly parses it as values, and
-invokes this same renderer once with those exact values, the actual template and
-current state into a separate verifier output. Only newly rendered bytes equal
-to the model-read `/work/report.md` bytes may be delivered as the task-final
-report. Missing/invalid values, raw prose, direct-write alternatives, stale or
-tampered template/source, missing report or byte mismatch have NO free-text
-fallback and NO delivered report. Retain raw final, attempted reports and
-refusals; do not repair, refresh, choose another answer, retry or overwrite a
-mismatching subject report. This all remains inside the native arm wall ceiling.
-The adapter is recipe-local, not a shared runtime/tool-schema modification,
-semantic validator, action authority or automatic whole-task success. Every
-authored statement, actual action and final state still needs independent
-grading; a valid values object, equal report or presentation receipt is not a
-task verdict. Generic tools could reproduce renderer bytes; equality does not
-prove an unforgeable invocation history.
+The recipe-local controller is the mandatory consumer of the final on-disk
+`/work/report-values.json`; installing Baton alone does not provide this routing.
+After the single native run ends, it captures that regular non-symlink file's
+exact bytes ONCE into separate operator custody with identity, size and SHA-256.
+The mandatory invocation of this same renderer consumes ONLY that read-only
+captured copy, the actual template and current state. Never reread subject values
+to supply rendering, select an earlier valid version, mine JSON from chat, strip
+fences or repair slots. Captured-copy identity/hash divergence is an infrastructure
+fault, not a consumer outcome.
 
-Qualification must exercise the full native template/read/values/render/readback/
-values-only-final and mandatory delivery path, including worst-case finalizer
-closure within unchanged caps; otherwise HOLD, not a shortened path. Same state
-and values must render byte-identically. Attribute model-caused mismatches as
-ordinary outcomes; non-model evidence changes or nondeterminism route
-infrastructure HOLD. Retain before/after source fingerprints; unknown attribution
-is not silently assumed model-caused.
+Only newly rendered bytes equal to the model-read `/work/report.md` bytes may be
+delivered as the task-final report. Missing/invalid last values, direct-write
+alternatives, stale or tampered template/source, missing report or byte mismatch
+have NO free-text fallback and NO delivered report. Retain raw free final, exact
+selected values, attempted reports and refusals; do not repair, refresh, choose
+another answer, retry or overwrite a mismatching subject report. The free final
+cannot supply or override rendering input. Native cap/repetition closure can
+still deliver already-complete artifacts without claiming normal native exit or
+granting another inference. All local work remains inside the same arm wall cap.
+
+The controller is recipe-local, not a shared runtime/tool-schema modification,
+semantic validator, action authority or automatic whole-task success. Every
+authored statement in values, attempted/delivered reports and raw free final
+still needs independent truth grading. A valid object, equal report or receipt
+is not a task verdict. Generic tools could reproduce renderer bytes; equality
+does not prove an unforgeable invocation history.
+
+Qualification exercises the complete native template/read/values/render/report
+readback/free-final and captured-input delivery path, including worst-case
+finalizer closure within unchanged caps; otherwise HOLD, not a shortened task.
+The frozen native-final-values control must actually deliver a values-only final
+and refuse a prose final. Same state and values must render byte-identically.
+Model-caused mismatches are ordinary outcomes; non-model evidence changes or
+nondeterminism route infrastructure HOLD. Retain before/after source fingerprints;
+unknown attribution is not silently assumed model-caused.
 
 
 ## Step 2 — Expose the tools
