@@ -355,7 +355,7 @@ class Baton:
                    "actor": self.actor}
         return template(facts, binding), registered
 
-    def _presentation_target(self, out, registered, slots=None):
+    def _presentation_target(self, out, registered, slots=None, values=None):
         target = Path(out).expanduser()
         resolved = target.resolve()
         state = self.dir.resolve()
@@ -375,11 +375,13 @@ class Baton:
                     sources.append(Path(located or executable))
         if slots is not None:
             sources.append(Path(slots).expanduser())
+        if values is not None:
+            sources.append(Path(values).expanduser())
         for source in sources:
             if (resolved == source.resolve()
                     or (target.exists() and source.exists()
                         and target.samefile(source))):
-                raise ValueError("presentation output aliases a source or slots input")
+                raise ValueError("presentation output aliases a source, slots or values input")
         return target
 
     @staticmethod
@@ -398,19 +400,23 @@ class Baton:
         return self._write_presentation(
             target, blob, document["evidence_sha256"])
 
-    def report(self, slots: str | Path, out: str | Path) -> dict:
-        from .reporting import load_slots, markdown, validate_slots
+    def report(self, slots: str | Path, values: str | Path,
+               out: str | Path) -> dict:
+        from .reporting import apply_values, load_slots, markdown, validate_slots
 
         slots = Path(slots).expanduser()
+        values = Path(values).expanduser()
         document = load_slots(slots.read_bytes())
+        prose = load_slots(values.read_bytes())
         try:
             binding = document["binding"]
             expected, registered = self._report_context(
                 binding["manifest_sha256"], binding["stage_report_sha256"])
             validate_slots(document, expected)
+            apply_values(prose, expected)
         except (KeyError, TypeError, IndexError) as error:
             raise ValueError("invalid report slots shape") from error
-        target = self._presentation_target(out, registered, slots=slots)
+        target = self._presentation_target(out, registered, slots=slots, values=values)
         # Complete validation and rendering before touching a prior output.
         blob = markdown(expected, self.manifest_path)
         return self._write_presentation(

@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--manifest-sha256", default=None)
     p.add_argument("--stage-report-sha256", default=None)
     p.add_argument("--slots", default=None)
+    p.add_argument("--values", default=None)
     p.add_argument("--out", default=None)
     try:
         a = p.parse_args(argv)
@@ -83,13 +84,15 @@ def main(argv: list[str] | None = None) -> int:
                 return _refuse("invalid", 1, "presentation requires --out and no positional arguments")
             try:
                 if a.op == "report-template":
-                    if not a.manifest_sha256 or not a.stage_report_sha256 or a.slots:
+                    if (not a.manifest_sha256 or not a.stage_report_sha256
+                            or a.slots or a.values):
                         raise ValueError("report-template requires --manifest-sha256 and --stage-report-sha256")
                     return _emit(baton.report_template(
                         a.manifest_sha256, a.stage_report_sha256, a.out))
-                if not a.slots or a.manifest_sha256 or a.stage_report_sha256:
-                    raise ValueError("report requires --slots, with bindings retained in that input")
-                return _emit(baton.report(a.slots, a.out))
+                if (not a.slots or not a.values
+                        or a.manifest_sha256 or a.stage_report_sha256):
+                    raise ValueError("report requires --slots and --values, with bindings retained in the template")
+                return _emit(baton.report(a.slots, a.values, a.out))
             except (OSError, ValueError, TypeError, KeyError, IndexError,
                     RecursionError) as error:
                 return _refuse("invalid", 1, str(error))

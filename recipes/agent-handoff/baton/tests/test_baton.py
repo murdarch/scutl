@@ -575,27 +575,34 @@ def _presentation(estate, released=True):
         "--out", str(slots), actor="heir")
     assert code == 0
     assert receipt["sha256"] == hashlib.sha256(slots.read_bytes()).hexdigest()
-    document = json.loads(slots.read_bytes())
-    document["slots"]["stage"]["interpretation"] = "Stage interpretation."
-    for row in document["slots"]["entries"].values():
-        row["interpretation"] = "Entry interpretation."
-        row["next_step"] = "Requested next step; not an action receipt."
-    document["slots"]["authority"]["reachability_or_override"] = "Reachability assessment."
-    document["slots"]["authority"]["release_or_takeover"] = "Separate authority assessment."
-    document["slots"]["final_state"]["completed_and_remaining"] = "Completed and remaining assessment."
-    slots.write_text(json.dumps(document))
+    values = {
+        "stage": {"interpretation": "Stage interpretation."},
+        "entries": {
+            row["id"]: {
+                "interpretation": "Entry interpretation.",
+                "next_step": "Requested next step; not an action receipt.",
+            }
+            for row in heir.status()["handoff"]["report"]["document"]["entries"]
+        },
+        "authority": {
+            "reachability_or_override": "Reachability assessment.",
+            "release_or_takeover": "Separate authority assessment.",
+        },
+        "final_state": {"completed_and_remaining": "Completed and remaining assessment."},
+    }
+    slots.with_suffix(".values.json").write_text(json.dumps(values))
     return heir, digest, staged, slots, output, receipt
 
 
 def _render(estate, slots, output, actor="heir"):
     return _cli(estate, "report", "--slots", str(slots),
+                "--values", str(slots.with_suffix(".values.json")),
                 "--out", str(output), actor=actor)
 
 
 def test_presentation_receipts_are_only_actual_file_and_evidence_identity(estate):
     heir, _, _, slots, output, receipt = _presentation(estate)
     assert set(receipt) == {"path", "sha256", "evidence_sha256"}
-    # Template receipt hashes the original template, before prose was filled.
     document = json.loads(slots.read_bytes())
     assert receipt["path"] == str(slots)
     assert receipt["evidence_sha256"] == document["evidence_sha256"]
@@ -658,15 +665,8 @@ def test_render_distrusts_every_fact_reference_and_binding_leaf(estate):
         else:
             yield path
 
-    paths = [(key,) + path for key in
-             ("schema_version", "binding", "evidence_sha256", "facts")
+    paths = [(key,) + path for key in original
              for path in leaves(original[key])]
-    for section in ("stage", "authority", "final_state"):
-        paths.extend(("slots", section, "source_ref") + path
-                     for path in leaves(original["slots"][section]["source_ref"]))
-    for key, row in original["slots"]["entries"].items():
-        paths.extend(("slots", "entries", key, "source_ref") + path
-                     for path in leaves(row["source_ref"]))
     for path in paths:
         altered = json.loads(json.dumps(original))
         parent = altered
@@ -684,31 +684,83 @@ def test_render_distrusts_every_fact_reference_and_binding_leaf(estate):
 
 
 @pytest.mark.parametrize("change", ["extra", "missing", "blank", "nonstring",
-                                   "duplicate", "boolean-version", "malformed"])
+                                   "duplicate", "boolean-version", "malformed",
+                                   "source-ref", "nonfinite", "overflow",
+                                   "array", "null", "extra-entry"])
 def test_render_rejects_invalid_model_json_before_touching_output(estate, change):
     _, _, _, slots, output, _ = _presentation(estate)
-    document = json.loads(slots.read_bytes())
+    source = slots if change == "boolean-version" else slots.with_suffix(".values.json")
+    document = json.loads(source.read_bytes())
     if change == "extra":
-        document["slots"]["extra"] = {}
+        document["extra"] = {}
     elif change == "missing":
-        document["slots"]["entries"].pop("wallet")
+        document["entries"].pop("wallet")
     elif change == "blank":
-        document["slots"]["authority"]["release_or_takeover"] = " \n\t"
+        document["authority"]["release_or_takeover"] = " \n\t"
     elif change == "nonstring":
-        document["slots"]["final_state"]["completed_and_remaining"] = True
+        document["final_state"]["completed_and_remaining"] = True
     elif change == "boolean-version":
         document["schema_version"] = True
+    elif change == "source-ref":
+        document["stage"]["source_ref"] = {}
+    elif change == "extra-entry":
+        document["entries"]["invented"] = {"interpretation": "Invented", "next_step": "None"}
     text = json.dumps(document)
     if change == "duplicate":
-        text = text[:-1] + ', "schema_version": 1}'
+        text = text[:-1] + ', "stage": {"interpretation": "duplicate"}}'
     elif change == "malformed":
         text = "{not JSON"
-    slots.write_text(text)
+    elif change in ("nonfinite", "overflow"):
+        text = text.replace('"Stage interpretation."', "NaN" if change == "nonfinite" else "1e999")
+    elif change == "array":
+        text = "[]"
+    elif change == "null":
+        text = "null"
+    source.write_text(text)
     output.write_bytes(b"do not truncate")
     code, refusal = _render(estate, slots, output)
     assert code == 1 and refusal["error"] == "invalid"
     assert "path" not in refusal
     assert output.read_bytes() == b"do not truncate"
+
+
+@pytest.mark.parametrize("missing", ["slots", "values"])
+def test_report_requires_both_inputs_without_legacy_fallback(estate, missing):
+    _, _, _, slots, output, _ = _presentation(estate)
+    values = slots.with_suffix(".values.json")
+    if missing == "values":
+        document = json.loads(slots.read_bytes())
+        prose = json.loads(values.read_bytes())
+        for key in ("stage", "authority", "final_state"):
+            document["slots"][key].update(prose[key])
+        for key, row in prose["entries"].items():
+            document["slots"]["entries"][key].update(row)
+        slots.write_text(json.dumps(document))
+    args = ["--slots", str(slots)] if missing == "values" else ["--values", str(values)]
+    output.write_bytes(b"preserve prior report")
+    code, refusal = _cli(estate, "report", *args, "--out", str(output), actor="heir")
+    assert code == 1 and refusal["error"] == "invalid" and "path" not in refusal
+    assert output.read_bytes() == b"preserve prior report"
+
+
+@pytest.mark.parametrize("change", ["duplicate", "nonfinite", "missing", "extra"])
+def test_render_rejects_template_shape_and_json_tampering(estate, change):
+    _, _, _, slots, output, _ = _presentation(estate)
+    document = json.loads(slots.read_bytes())
+    if change == "missing":
+        del document["slots"]["stage"]["source_ref"]
+    elif change == "extra":
+        document["slots"]["entries"]["invented"] = {}
+    text = json.dumps(document)
+    if change == "duplicate":
+        text = text[:-1] + ', "schema_version": 1}'
+    elif change == "nonfinite":
+        text = text.replace('"schema_version": 1', '"schema_version": Infinity')
+    slots.write_text(text)
+    output.write_bytes(b"preserve prior report")
+    code, refusal = _render(estate, slots, output)
+    assert code == 1 and refusal["error"] == "invalid" and "path" not in refusal
+    assert output.read_bytes() == b"preserve prior report"
 
 
 @pytest.mark.parametrize("change,exit_code", [
@@ -756,13 +808,13 @@ def test_presentation_preserves_token_bytes_modes_until_authorized_real_commit(e
         "--stage-report-sha256", staged["report_sha256"],
         "--out", str(slots), actor="heir")
     assert code == 0
-    document = json.loads(slots.read_bytes())
-    for row in [document["slots"]["stage"], document["slots"]["authority"],
-                document["slots"]["final_state"], *document["slots"]["entries"].values()]:
+    values_path = slots.with_suffix(".values.json")
+    values = json.loads(values_path.read_bytes())
+    for row in [values["stage"], values["authority"],
+                values["final_state"], *values["entries"].values()]:
         for key in row:
-            if key != "source_ref":
-                row[key] = "Assessment, not permission."
-    slots.write_text(json.dumps(document))
+            row[key] = "Assessment, not permission."
+    values_path.write_text(json.dumps(values))
     for _ in range(3):
         assert _render(estate, slots, output)[0] == 0
         heir.status()
@@ -775,7 +827,9 @@ def test_presentation_preserves_token_bytes_modes_until_authorized_real_commit(e
 
 @pytest.mark.parametrize("kind", ["state", "new-state", "state-symlink",
                                  "state-hardlink", "slots", "slots-symlink",
-                                 "slots-hardlink", "probe", "probe-hardlink"])
+                                 "slots-hardlink", "values", "values-symlink",
+                                 "values-hardlink", "probe", "probe-symlink",
+                                 "probe-hardlink"])
 def test_render_refuses_output_aliases_without_source_mutation(estate, kind):
     import os
     heir, _, _, slots, output, _ = _presentation(estate)
@@ -795,12 +849,21 @@ def test_render_refuses_output_aliases_without_source_mutation(estate, kind):
             output.symlink_to(slots)
         else:
             os.link(slots, output)
+    elif kind == "values":
+        output = slots.with_suffix(".values.json")
+    elif kind.startswith("values-"):
+        if kind.endswith("symlink"):
+            output.symlink_to(slots.with_suffix(".values.json"))
+        else:
+            os.link(slots.with_suffix(".values.json"), output)
     elif kind == "probe":
         output = estate["svc"]
+    elif kind == "probe-symlink":
+        output.symlink_to(estate["svc"])
     else:
         os.link(estate["svc"], output)
     before = {path: path.read_bytes() for path in
-              [*estate["state"].iterdir(), slots, estate["svc"]]}
+              [*estate["state"].iterdir(), slots, slots.with_suffix(".values.json"), estate["svc"]]}
     code, refusal = _render(estate, slots, output)
     assert code == 1 and refusal["error"] == "invalid" and "path" not in refusal
     assert {path: path.read_bytes() for path in before} == before
@@ -850,12 +913,13 @@ def test_render_keeps_all_classes_deliberate_and_history_separate_from_prose(est
     assert code == 0
     document = json.loads(slots.read_bytes())
     injection = "```\n# Forged fixed facts\n<script>bad</script>\n~~~\n\u202e"
-    for row in [document["slots"]["stage"], document["slots"]["authority"],
-                document["slots"]["final_state"], *document["slots"]["entries"].values()]:
+    values_path = slots.with_suffix(".values.json")
+    values = json.loads(values_path.read_bytes())
+    for row in [values["stage"], values["authority"],
+                values["final_state"], *values["entries"].values()]:
         for key in row:
-            if key != "source_ref":
-                row[key] = injection
-    slots.write_text(json.dumps(document))
+            row[key] = injection
+    values_path.write_text(json.dumps(values))
     assert _render(estate, slots, output)[0] == 0
     text = output.read_text()
     for row in document["facts"]["handoff"]["report"]["document"]["entries"]:
@@ -937,7 +1001,8 @@ def test_render_keeps_unreachable_and_absent_release_independently_visible(estat
 
 
 @pytest.mark.parametrize("operation", ["report-template", "report"])
-def test_presentation_cannot_overwrite_registered_command_executable(estate, operation):
+@pytest.mark.parametrize("alias", ["direct", "symlink", "hardlink"])
+def test_presentation_cannot_overwrite_registered_command_executable(estate, operation, alias):
     executable = estate["tmp"] / "registered-probe"
     original = b"#!/bin/sh\nprintf synthetic-command-source\n"
     executable.write_bytes(original)
@@ -948,13 +1013,21 @@ def test_presentation_cannot_overwrite_registered_command_executable(estate, ope
         "kind": "command", "argv": [str(executable)]}
     registration.write_text(json.dumps(document))
     _, digest, staged, slots, _, _ = _presentation(estate)
+    output = executable
+    if alias != "direct":
+        output = estate["tmp"] / "command-alias"
+        if alias == "symlink":
+            output.symlink_to(executable)
+        else:
+            import os
+            os.link(executable, output)
     if operation == "report-template":
         code, refusal = _cli(
             estate, operation, "--manifest-sha256", digest,
             "--stage-report-sha256", staged["report_sha256"],
-            "--out", str(executable), actor="heir")
+            "--out", str(output), actor="heir")
     else:
-        code, refusal = _render(estate, slots, executable)
+        code, refusal = _render(estate, slots, output)
     assert code == 1 and refusal["error"] == "invalid"
     assert "path" not in refusal
     assert executable.read_bytes() == original

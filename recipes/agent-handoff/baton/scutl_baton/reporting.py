@@ -69,31 +69,36 @@ def template(facts, binding):
 
 
 def validate_slots(actual, expected):
-    """Only named prose may differ; compare every other JSON value exactly."""
+    """The component-owned template must match regenerated evidence in full."""
+    # Canonical bytes distinguish JSON true from 1, unlike Python equality.
+    if canonical(actual) != canonical(expected):
+        raise ValueError("slots schema, binding, facts or source references changed")
+
+
+def apply_values(values, document):
+    """Insert only exact, complete, nonblank prose values into a valid template."""
     try:
-        actual_slots = actual["slots"]
-        pairs = [(actual_slots["stage"], expected["slots"]["stage"],
-                  ("interpretation",))]
-        pairs.extend((actual_slots["entries"][key], target,
-                      ("interpretation", "next_step"))
-                     for key, target in expected["slots"]["entries"].items())
-        pairs.extend([
-            (actual_slots["authority"], expected["slots"]["authority"],
-             ("reachability_or_override", "release_or_takeover")),
-            (actual_slots["final_state"], expected["slots"]["final_state"],
-             ("completed_and_remaining",)),
-        ])
-        for source, target, fields in pairs:
+        slots = document["slots"]
+        if (not isinstance(values, dict) or values.keys() != slots.keys()
+                or not isinstance(values["entries"], dict)
+                or values["entries"].keys() != slots["entries"].keys()):
+            raise ValueError("report values must cover exactly the template slots")
+        pairs = [(values["stage"], slots["stage"])]
+        pairs.extend((values["entries"][key], row)
+                     for key, row in slots["entries"].items())
+        pairs.extend((values[key], slots[key])
+                     for key in ("authority", "final_state"))
+        for source, target in pairs:
+            fields = target.keys() - {"source_ref"}
+            if not isinstance(source, dict) or source.keys() != fields:
+                raise ValueError("report values keys must be prose fields only")
             for field in fields:
                 text = source[field]
                 if not isinstance(text, str) or not text.strip():
                     raise ValueError(f"prose slot {field} must be a nonblank string")
                 target[field] = text
-        # Canonical bytes distinguish JSON true from 1, unlike Python equality.
-        if canonical(actual) != canonical(expected):
-            raise ValueError("slots schema, binding, facts or source references changed")
     except (KeyError, TypeError, IndexError) as error:
-        raise ValueError("invalid report slots shape") from error
+        raise ValueError("invalid report values shape") from error
 
 
 def _block(value, prose=False):
