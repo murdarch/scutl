@@ -201,6 +201,45 @@ components:
                                # findings and for any re-baseline; the
                                # note names the evidence that closed it.
         command: "sprecon resolve --finding {id} --note {note}"
+      - name: sr_report_template
+        command: "sprecon report-template --out /work/report-slots.json"
+      - name: sr_report
+        command: "sprecon report --slots /work/report-slots.json --values /work/report-values.json --out /work/report.md"
+    reporting:
+      source: "/run/report-sources/index.json"
+      authority: >
+        An operator-owned, subject-read-only source view, initialized before
+        launch, records only genuine complete successful reconcile output
+        that actually reached the model. Each declared world needs a current
+        witness bound to the current run, exact environment, command and
+        backing identities. Missing evidence stays missing; hashes establish
+        integrity, not authority or task success.
+      source_command: >
+        Use the actual declared world's direct environment mapping:
+        env -u SPRECON_PSERV -u SPRECON_PROV SPRECON_ROOT=<state>
+        SPRECON_WALLET=<wallet> SPRECON_RPC=<rpc> SPRECON_PROV=<prov-or-empty>
+        SPRECON_PSERV=<pserv-or-empty> /component/bin/sprecon reconcile
+        [--billing-file <actual-statement>]. Run one unambiguous command,
+        without compounds, echo substitutes, redirections or truncated output.
+      workflow: >
+        After obtaining a genuine completed reconcile for every declared world,
+        run sr_report_template and read the entire /work/report-slots.json.
+        Save the SAME entire object as /work/report-values.json, changing only
+        null prose values to nonempty strings: each world's interpretation,
+        unresolved_scope and next_authorized_step, plus overall.completed and
+        overall.remaining. Read the canonical final values file, run sr_report,
+        then read the entire /work/report.md. The delivered report contains all
+        original envelopes in declared world order and those exact prose slots.
+        A free final chat response is retained separately, not delivered as
+        the report. Never rewrite facts, merge worlds, infer sums or invent
+        currentness. A changed source or backing identity requires a new
+        current template and values object; refusal never replaces output.
+      receipt: >
+        Only path, sha256 and evidence_sha256 (the raw source-index digest);
+        no semantic success flag. The operator independently captures the
+        final canonical values file once, renders from that read-only copy
+        and requires equality with the fully read native report. Component
+        rendering alone cannot certify readback or model provenance.
     invariants:
       - "The reconciler holds no key material and no provider
          credentials: no signing key, no kek, no API key. Its config

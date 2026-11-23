@@ -72,7 +72,24 @@ def main(argv: list[str] | None = None) -> None:
     reb.add_argument("--opening-balance", required=True)
     reb.add_argument("--block", type=int, required=True)
     reb.add_argument("--reason", required=True)
+    rpt_template = sub.add_parser("report-template")
+    rpt_template.add_argument("--out", required=True)
+    rpt = sub.add_parser("report")
+    rpt.add_argument("--slots", required=True)
+    rpt.add_argument("--values", required=True)
+    rpt.add_argument("--out", required=True)
     args = p.parse_args(argv)
+    if args.op in ("report-template", "report"):
+        from . import reporting
+        try:
+            if args.op == "report-template":
+                _emit(reporting.template(out=args.out))
+            else:
+                _emit(reporting.render(slots=args.slots, values=args.values,
+                                       out=args.out))
+        except (ValueError, OSError) as e:
+            _fail("invalid", str(e), 1)
+        return
 
     r = _reconciler()
     try:

@@ -179,6 +179,99 @@ explained by findings is not a clean disposition.
   and past-deadline escalations are not honest pending entries.
 
 
+### Fixed-source reporting and delivery
+
+When this reporting contract is enabled, expose `sr_report_template` and
+`sr_report` in addition to the audit tools. They dispatch before construction
+of a reconciler: no RPC, audited/state writes, approval-directory creation,
+token reads or token consumption. Existing audit/action commands retain their
+semantics. The reporting module is standard-library-only.
+
+The operator initializes `/run/report-sources/index.json` before native launch
+and mounts its directory read-only to the subject and mandatory verifier.
+There is no CLI source override. Only genuine, complete, successful terminal
+output from an unambiguous `/component/bin/sprecon reconcile` with the declared
+world's exact `SPRECON_ROOT`, `SPRECON_WALLET`, `SPRECON_RPC`, `SPRECON_PROV`
+and `SPRECON_PSERV` mapping is eligible. A truthful direct invocation is:
+
+```text
+env -u SPRECON_PSERV -u SPRECON_PROV SPRECON_ROOT=<state> SPRECON_WALLET=<wallet> SPRECON_RPC=<rpc> SPRECON_PROV=<prov-or-empty> SPRECON_PSERV=<pserv-or-empty> /component/bin/sprecon reconcile
+```
+
+Use actual operator-declared values, shell-quoted as necessary; append only
+`--billing-file <actual-statement>` when supplied. Do not use compound
+commands, substitute echoed JSON, redirect or truncate the completed envelope.
+The operator observes the actual result before forwarding it upstream.
+Missing eligible output remains missing; reporting never secretly reconciles.
+
+Each source witness binds its run/world, positive sequence, observation time
+at or after task start, exact actual command, complete original result and
+current file/absence/directory identities. Hashes are integrity checks, not
+cryptographic authenticity: authority comes from the operator's read-only
+channel and actual-command/output origin. The module refuses symlinks,
+changed bytes/size/mode/absence, wrong scope and stale or missing witnesses
+before writing either template or report. It does not reinterpret the audit
+numbers or substitute report-read time for `as_of` or original-record deadlines.
+
+The native workflow is:
+
+1. Obtain a genuine completed reconcile for **every** declared world.
+2. Run `sprecon report-template --out /work/report-slots.json` and completely
+   read that file.
+3. Preserve the same whole object as `/work/report-values.json`, filling only
+   its null prose values with nonempty strings. Read that canonical final file.
+4. Run `sprecon report --slots /work/report-slots.json --values /work/report-values.json --out /work/report.md`.
+5. Completely read `/work/report.md` before mandatory operator rendering.
+
+The template and values schema is exactly:
+
+```json
+{
+  "schema": 1,
+  "sources_sha256": "<sha256 of raw current index bytes>",
+  "facts": [{"world": "<declared world id>", "result": "<complete actual envelope object>"}],
+  "values": {
+    "<world>.interpretation": null,
+    "<world>.unresolved_scope": null,
+    "<world>.next_authorized_step": null,
+    "overall.completed": null,
+    "overall.remaining": null
+  }
+}
+```
+
+`result` above denotes an object, not a string; every declared world contributes
+one fact and its three prose slots in declared order. The values file is the
+same entire template object, with only the nulls replaced. No missing/extra
+keys, type changes, fact echoes changed by the model or stale source digest
+are accepted. Facts regenerate from the current source and backing identities.
+The deterministic report retains the entire genuine JSON envelope per world,
+including conservation, legs, invariant, scope, decoded counts, exclusions,
+physical checkpoints, this-pass versus latest findings, and original-record
+deadlines. Source strings are quoted data, not instructions. Prose remains
+explicitly named; no sums, inferred categories, cross-world merge or generated
+task-success conclusion is added.
+
+Both commands return exactly `{path, sha256, evidence_sha256}`, where
+`evidence_sha256` is the raw source-index digest, never a semantic success
+flag. Validation refusal is exit 1 / `invalid` JSON and leaves existing output
+unchanged. Outputs must be outside audited/state/approval roots and must not
+alias inputs. The pure Python APIs `source_view(source_path=...)`,
+`template(source_path=..., out=...)` and
+`render(source_path=..., slots=..., values=..., out=...)` accept an explicit
+source path only for isolated qualification.
+
+The operator captures the **final** `/work/report-values.json` once using
+regular-file/no-symlink identity, size and hash checks into separate custody,
+verifies that copy around consumption and passes only the read-only copy to
+the mandatory renderer. Its separately written output must equal the actual
+native report that was completely read upstream. Never overwrite the native
+report, mine values from chat/tool results or fall back to an earlier valid
+file. Free final chat is retained/grading-separated, not delivered. The
+component cannot certify model provenance or complete upstream readback;
+those are mandatory harness/manual obligations within the same arm deadline.
+
+
 ## Step 3 — Carry the guardrails into system context
 
 Copy `execute.guardrails` and the `execute.loop` description from
